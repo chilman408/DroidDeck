@@ -1,0 +1,218 @@
+diff --git a/js/audio/audio-controller.js b/js/audio/audio-controller.js
+index c0917c5..5f79fcb 100644
+--- a/js/audio/audio-controller.js
++++ b/js/audio/audio-controller.js
+@@ -6,6 +6,7 @@
+   class AudioController {
+     constructor(options) {
+       this.audioWebsocketUrl = options.audioWebsocketUrl;
++      this.apiClient = options.apiClient;
+       this.state = "stopped";
+       this.enabled = true;
+       this.volume = 1.0;
+@@ -29,6 +30,7 @@
+ 
+       this.enabled = String(cfg.isAudioEnabled) !== "false";
+       this.volume = Number(cfg.audioVolume ?? 1.0);
++      if (!this.enabled) this.stop();
+ 
+       try {
+         if (typeof global.setAudioEnabled === "function") {
+@@ -56,6 +58,8 @@
+     }
+ 
+     startFromGesture() {
++      if (!this.enabled) return;
++      global.audioWebsocketUrl = this.apiClient ? this.apiClient.socketUrl(this.audioWebsocketUrl) : this.audioWebsocketUrl;
+       try {
+         if (typeof global.primeAudioFromGesture === "function") {
+           global.primeAudioFromGesture();
+@@ -72,7 +76,6 @@
+         // no-op
+       }
+ 
+-      this._setState("playing");
+       this._wireAudioElementEvents();
+     }
+ 
+diff --git a/js/audio/audioplayback.js b/js/audio/audioplayback.js
+index cecc73e..6516cc1 100644
+--- a/js/audio/audioplayback.js
++++ b/js/audio/audioplayback.js
+@@ -28,15 +28,20 @@
+   let recovering = false;
+ 
+   let audioCtx = null;
++  let audioGain = null;
++  let mediaUrl = null;
++  let recoveryTimer = null;
+ 
+   function log(){ /* console.log.apply(console, ['[Audio]', ...arguments]); */ }
+ 
+   window.setAudioEnabled = function(enabled) {
+     isAudioEnabled = (typeof enabled === 'boolean') ? enabled : (enabled !== 'false');
++    if (!isAudioEnabled) window.stopAudioPlayback();
+   };
+   window.setAudioVolume = function(volume) {
+-    audioVolume = Math.max(0, Math.min(1, Number(volume)));
+-    if (audioEl) audioEl.volume = audioVolume;
++    audioVolume = Number.isFinite(Number(volume)) ? Math.max(0, Math.min(1.5, Number(volume))) : 1;
++    if (audioGain) audioGain.gain.value = audioVolume;
++    if (audioEl) audioEl.volume = audioGain ? 1 : Math.min(1, audioVolume);
+   };
+   window.getAudioEnabled = function() { return isAudioEnabled; };
+ 
+@@ -49,13 +54,13 @@
+   };
+ 
+   window.startAudioPlayback = function () {
+-    if (started) return;
+-    started = true;
+-    startAudio();
++    if (started || !isAudioEnabled) return;
++    started = startAudio();
+   };
+ 
+   window.stopAudioPlayback = function () {
+     started = false;
++    clearTimeout(recoveryTimer); recoveryTimer = null; recovering = false;
+     stopAudio();
+   };
+ 
+@@ -68,7 +73,7 @@
+     audioEl.controls = false;
+     audioEl.muted = false;
+     audioEl.crossOrigin = "anonymous";
+-    audioEl.volume = audioVolume;
++    audioEl.volume = Math.min(1, audioVolume);
+     document.body.appendChild(audioEl);
+ 
+     window.__liveAudioEl = audioEl;
+@@ -86,6 +91,10 @@
+     const Ctx = window.AudioContext || window.webkitAudioContext;
+     if (!Ctx) return null;
+     audioCtx = new Ctx();
++    const source = audioCtx.createMediaElementSource(ensureAudioEl());
++    audioGain = audioCtx.createGain(); audioGain.gain.value = audioVolume;
++    audioEl.volume = 1;
++    source.connect(audioGain); audioGain.connect(audioCtx.destination);
+     return audioCtx;
+   }
+ 
+@@ -99,7 +108,8 @@
+   function setupMSE() {
+     mediaSource = new MediaSource();
+     const el = ensureAudioEl();
+-    el.src = URL.createObjectURL(mediaSource);
++    mediaUrl = URL.createObjectURL(mediaSource);
++    el.src = mediaUrl;
+     el.load();
+ 
+     mediaSource.addEventListener('sourceopen', () => {
+@@ -110,13 +120,13 @@
+ 
+         sourceBuffer.addEventListener('updateend', () => {
+           processQueue();
+-          maybeTrimOld();
+           maybeReduceLatency();
+         });
+         sourceBuffer.addEventListener('error', (e) => {
+           log('SourceBuffer error', e);
+           recoverPipelineSoon();
+         });
++        processQueue();
+       } catch (e) {
+         log('addSourceBuffer failed', e);
+         recoverPipelineSoon();
+@@ -155,6 +165,8 @@
+       }
+     } catch {}
+     mediaSource = null;
++    if (mediaUrl) URL.revokeObjectURL(mediaUrl);
++    mediaUrl = null;
+ 
+     try {
+       if (audioEl) {
+@@ -269,7 +281,9 @@
+   function recoverPipelineSoon() {
+     if (recovering) return;
+     recovering = true;
+-    setTimeout(() => {
++    recoveryTimer = setTimeout(() => {
++      recoveryTimer = null;
++      if (!started || !isAudioEnabled) { recovering = false; return; }
+       stopAudio();
+       startAudio();
+       recovering = false;
+@@ -277,8 +291,7 @@
+   }
+ 
+   function startAudio() {
+-    if (!isAudioEnabled) { log('audio disabled'); return; }
+-    if (!window.audioWebsocketUrl) { log('no audioWebsocketUrl'); return; }
++    if (!isAudioEnabled || !window.audioWebsocketUrl || !window.MediaSource || !MediaSource.isTypeSupported(MIME)) return false;
+ 
+     resumeAudioContextIfNeeded();
+     setupMSE();
+@@ -287,6 +300,7 @@
+     setupMediaSession();
+ 
+     ensureAudioEl().play().catch(()=>{});
++    return true;
+   }
+ 
+   function stopAudio() {
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index f86ae78..bf5e5c8 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -9,10 +9,13 @@
+       this.githubApiBaseUrl = "https://api.github.com";
+       this.displaySession = null;
+       this.displayState = null;
++      this.browserAudioSupported = false;
+     }
+ 
+-    fetchSystemConfiguration() {
+-      return this._fetchJson(this.apiBaseUrl + "/configuration");
++    async fetchSystemConfiguration() {
++      const configuration = await this._fetchJson(this.apiBaseUrl + "/configuration");
++      this.browserAudioSupported = configuration.browserAudioSupported === 1;
++      return configuration;
+     }
+ 
+     fetchBrowserAccess() {
+@@ -124,11 +127,19 @@
+     }
+ 
+     setBrowserAudioState(value) {
+-      return this._postPlain(this.apiBaseUrl + "/browserAudioState", value);
++      return this._postAudio("browserAudioState", value);
+     }
+ 
+     setBrowserAudioVolume(value) {
+-      return this._postPlain(this.apiBaseUrl + "/browserAudioVolume", value);
++      return this._postAudio("browserAudioVolume", value);
++    }
++
++    async _postAudio(route, value) {
++      if (!this.browserAudioSupported) return this._postPlain(this.apiBaseUrl + "/" + route, value);
++      if (!this.displaySession) throw new Error("Display session required for sound settings");
++      await this._fetch(this.apiBaseUrl + "/" + route, { method: "POST", body: String(value), headers: {
++        "Content-Type": "text/plain", "X-Display-Session": this.displaySession.token,
++        "X-Display-CSRF": this.displaySession.csrfToken } });
+     }
+ 
+     setGpsState(value) {
+diff --git a/js/core/app.js b/js/core/app.js
+index 26c8209..6a1e356 100644
+--- a/js/core/app.js
++++ b/js/core/app.js
+@@ -53,6 +53,7 @@
+ 
+     const audioController = new TAHtml.AudioController({
+       audioWebsocketUrl: flavor.audioWebSocket,
++      apiClient,
+     });
+     audioController.initialize();
+ 

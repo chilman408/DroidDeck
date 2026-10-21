@@ -1,0 +1,328 @@
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+index d8dfbbd..a7065dc 100644
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -464,6 +464,12 @@
+       }
+ 
+       this.isPaused = nextPaused;
++      if (this.onControlStateChange && this.remoteDisplayState?.displayControlSupported === 1) {
++        this.onControlStateChange({ ...this.remoteDisplayState,
++          canControl: Boolean(this.remoteDisplayState.canControl && !nextPaused &&
++            !this.pageSuspended && !this.controlRequestInFlight &&
++            this.remoteDisplayState.transactionStatus === "idle") });
++      }
+ 
+       if (nextPaused) {
+         this._hideDisplayTypeSelectionDialog();
+diff --git a/js/display/display-renderer-manager.js b/js/display/display-renderer-manager.js
+index 315c618..d6540c8 100644
+--- a/js/display/display-renderer-manager.js
++++ b/js/display/display-renderer-manager.js
+@@ -30,6 +30,7 @@
+         windowWidth: 1,
+         windowHeight: 1,
+       };
++      global.requestDisplayStreamReconnect = () => this.displaySocket?.refresh();
+     }
+ 
+     applyDisplaySize(width, height) {
+@@ -155,8 +156,8 @@
+         return;
+       }
+ 
+-      const width = Math.max(1, Math.round(this.displayRoot.clientWidth || global.innerWidth || 1));
+-      const height = Math.max(1, Math.round(this.displayRoot.clientHeight || global.innerHeight || 1));
++      const width = Math.max(1, Math.round(this.displayRoot.clientWidth || this.lastDisplaySize.windowWidth));
++      const height = Math.max(1, Math.round(this.displayRoot.clientHeight || this.lastDisplaySize.windowHeight));
+ 
+       global.updateDisplayRendererConfig({
+         displayWidth: this.lastDisplaySize.displayWidth,
+diff --git a/js/display/renderers/h264-webcodecs/h264WebCodecs.js b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+index d66bdab..ce6e47a 100644
+--- a/js/display/renderers/h264-webcodecs/h264WebCodecs.js
++++ b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+@@ -132,31 +132,46 @@ window.addEventListener("resize", function () {
+ });
+ 
+ var videoWatchdog = null;
+-function usePngFallback(reason) {
++var videoRecoveryTimer = null;
++var videoRecoveryPending = false;
++function reconnectVideoStream(reason) {
+   if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
+   clearTimeout(videoWatchdog);
+-  console.warn("H264 fallback", reason && (reason.message || reason));
+-  var fallbackUrl = new URL(window.location.href);
+-  fallbackUrl.searchParams.set("video", "png");
+-  window.location.replace(fallbackUrl.href);
++  videoWatchdog = null;
++  videoRecoveryPending = true;
++  canvas.dataset.videoState = "reconnecting";
++  if (videoRecoveryTimer !== null) return;
++  console.warn("H264 reconnect", reason && (reason.message || reason));
++  videoRecoveryTimer = setTimeout(function () {
++    videoRecoveryTimer = null;
++    if (typeof window.requestDisplayStreamReconnect === "function") window.requestDisplayStreamReconnect();
++    watchVideoFrames();
++  }, 1000);
+ }
+ function watchVideoFrames() {
+   if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
+-  clearTimeout(videoWatchdog);
++  if (videoWatchdog !== null) return;
+   // A verified logical resize may occupy the full 20-second transaction budget.
+-  videoWatchdog = setTimeout(usePngFallback, 30000);
++  videoWatchdog = setTimeout(function () { reconnectVideoStream("No decoded output"); }, 30000);
+ }
+ if (worker) {
+   worker.onmessage = function (event) {
+-    if (event.data.error) { usePngFallback(event.data.error); return; }
++    if (event.data.error) { reconnectVideoStream(event.data.error); return; }
+     if (event.data.frameRendered) {
+       canvas.dataset.videoFrames = String(Number(canvas.dataset.videoFrames || 0) + 1);
+       canvas.dataset.videoWidth = String(event.data.width);
+       canvas.dataset.videoHeight = String(event.data.height);
+-      watchVideoFrames();
++      if (!videoRecoveryPending) {
++        canvas.dataset.videoState = "ready";
++        clearTimeout(videoWatchdog);
++        videoWatchdog = null;
++        if (event.data.pendingDecode > 0) watchVideoFrames();
++        clearTimeout(videoRecoveryTimer);
++        videoRecoveryTimer = null;
++      }
+     }
+   };
+-  worker.onerror = usePngFallback;
++  worker.onerror = reconnectVideoStream;
+ }
+ watchVideoFrames();
+ 
+@@ -181,8 +196,11 @@ function drawDisplayFrame(arrayBuffer) {
+             metadata.width % 2 || metadata.height % 2 ||
+             metadata.width * metadata.height > 1600000) throw new Error("Invalid video size");
+         worker.postMessage({ scrcpySession: metadata });
+-      } catch (_error) { usePngFallback(); }
++        videoRecoveryPending = false;
++        watchVideoFrames();
++      } catch (_error) { reconnectVideoStream("Invalid stream metadata"); }
+     } else if (arrayBuffer instanceof ArrayBuffer) {
++      watchVideoFrames();
+       worker.postMessage({ scrcpyPacket: arrayBuffer }, [arrayBuffer]);
+     }
+   } else {
+diff --git a/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js b/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js
+index bb3fb22..5fd72d3 100644
+--- a/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js
++++ b/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js
+@@ -18,6 +18,11 @@ let nextTimestampUs = 0;
+ const FRAME_DURATION_US = 33333;
+ const MAX_RENDER_QUEUE_SIZE = 4;
+ const MAX_DECODE_QUEUE_SIZE = 8;
++const MAX_SCRCPY_PACKETS = 120;
++const MAX_SCRCPY_BYTES = 2097152;
++let scrcpyPackets = [];
++let scrcpyBytes = 0;
++let scrcpyInFlight = 0;
+ 
+ let positionLocation = null;
+ let texcoordLocation = null;
+@@ -68,6 +73,10 @@ function configureDecoderFromSpsPps() {
+   }
+ 
+   try {
++    decoder.reset();
++    closeAllPendingFrames();
++    clearScrcpyPackets();
++    scrcpyInFlight = 0;
+     decoder.configure(config);
+     dropDeltaUntilKeyframe = true;
+   } catch (error) {
+@@ -77,18 +86,37 @@ function configureDecoderFromSpsPps() {
+   }
+ }
+ 
+-function applyRuntimeConfig(config) {
++function clearScrcpyPackets() {
++  scrcpyPackets = [];
++  scrcpyBytes = 0;
++}
++
++function drainScrcpyPackets() {
++  if (!decoder || decoder.state !== "configured") return;
++  while (scrcpyPackets.length && getDecodeQueueSize() < MAX_DECODE_QUEUE_SIZE && scrcpyInFlight < MAX_DECODE_QUEUE_SIZE) {
++    const packet = scrcpyPackets.shift(); scrcpyBytes -= packet.data.byteLength;
++    try {
++      scrcpyInFlight++;
++      decoder.decode(new EncodedVideoChunk(packet));
++    } catch (error) {
++      scrcpyInFlight--;
++      clearScrcpyPackets(); dropDeltaUntilKeyframe = true;
++      self.postMessage({ error: String(error) });
++      return;
++    }
++  }
++}
++
++function applyRuntimeConfig(config, encodedGeometry) {
+   const runtimeConfig = config || {};
+-  const nextWidth = toSafeNumber(runtimeConfig.displayWidth, width);
+-  const nextHeight = toSafeNumber(runtimeConfig.displayHeight, height);
++  const useEncodedSize = packetFormat !== "scrcpy" || encodedGeometry === true;
++  const nextWidth = useEncodedSize ? toSafeNumber(runtimeConfig.displayWidth, width) : width;
++  const nextHeight = useEncodedSize ? toSafeNumber(runtimeConfig.displayHeight, height) : height;
+   const nextWindowWidth = toSafeNumber(runtimeConfig.windowWidth, windowWidth);
+   const nextWindowHeight = toSafeNumber(runtimeConfig.windowHeight, windowHeight);
+ 
+-  const sizeChanged =
+-    nextWidth !== width ||
+-    nextHeight !== height ||
+-    nextWindowWidth !== windowWidth ||
+-    nextWindowHeight !== windowHeight;
++  const encodedSizeChanged = nextWidth !== width || nextHeight !== height;
++  const presentationChanged = nextWindowWidth !== windowWidth || nextWindowHeight !== windowHeight;
+ 
+   width = nextWidth;
+   height = nextHeight;
+@@ -96,15 +124,21 @@ function applyRuntimeConfig(config) {
+   windowHeight = nextWindowHeight;
+ 
+   if (offscreenCanvas) {
+-    offscreenCanvas.width = windowWidth;
+-    offscreenCanvas.height = windowHeight;
++    if (offscreenCanvas.width !== windowWidth) offscreenCanvas.width = windowWidth;
++    if (offscreenCanvas.height !== windowHeight) offscreenCanvas.height = windowHeight;
+   }
+ 
+-  if (gl) {
++  if (gl && presentationChanged) {
+     gl.viewport(0, 0, windowWidth, windowHeight);
++    // Canvas resizing clears its drawing buffer, but the last texture survives.
++    if (frameTexture) {
++      gl.bindTexture(gl.TEXTURE_2D, frameTexture);
++      gl.drawArrays(gl.TRIANGLES, 0, 6);
++      gl.bindTexture(gl.TEXTURE_2D, null);
++    }
+   }
+ 
+-  if (sizeChanged) {
++  if (encodedSizeChanged) {
+     closeAllPendingFrames();
+     configureDecoderFromSpsPps();
+   }
+@@ -178,7 +212,8 @@ function drawImageToCanvas(image) {
+ 
+   if (packetFormat === "scrcpy") {
+     self.postMessage({ frameRendered: true, width: image.displayWidth, height: image.displayHeight,
+-      codedWidth: image.codedWidth, codedHeight: image.codedHeight });
++      codedWidth: image.codedWidth, codedHeight: image.codedHeight,
++      pendingDecode: scrcpyPackets.length + scrcpyInFlight });
+   }
+   if (image.close) {
+     image.close();
+@@ -357,20 +392,18 @@ function handleScrcpyPacket(data) {
+   }
+   const key = Boolean(bytes[0] & 0x20);
+   if (!decoder || decoder.state !== "configured" || !spsPps) return;
+-  if (!key && (dropDeltaUntilKeyframe || isDecodeBacklogged())) {
+-    dropDeltaUntilKeyframe = true;
+-    return;
+-  }
++  if (!key && dropDeltaUntilKeyframe) return;
+   const timestamp = (header.getUint32(0) & 0x1fffffff) * 4294967296 + header.getUint32(4);
+   if (!Number.isSafeInteger(timestamp)) return;
+-  try {
+-    decoder.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: timestamp,
+-      data: key ? appendByteArray(spsPps, payload) : payload }));
+-    if (key) dropDeltaUntilKeyframe = false;
+-  } catch (error) {
+-    dropDeltaUntilKeyframe = true;
+-    self.postMessage({ error: String(error) });
+-  }
++  const packet = { type: key ? "key" : "delta", timestamp: timestamp,
++    data: key ? appendByteArray(spsPps, payload) : payload };
++  if (scrcpyPackets.length >= MAX_SCRCPY_PACKETS || scrcpyBytes + packet.data.byteLength > MAX_SCRCPY_BYTES) {
++    clearScrcpyPackets(); dropDeltaUntilKeyframe = true;
++    self.postMessage({ error: "H264 decode buffer exceeded" }); return;
++  }
++  scrcpyPackets.push(packet); scrcpyBytes += packet.data.byteLength;
++  if (key) dropDeltaUntilKeyframe = false;
++  drainScrcpyPackets();
+ }
+ 
+ function initializeGL(glContext) {
+@@ -449,6 +482,23 @@ function createShader(glContext, type, source) {
+   throw new Error("Shader compile error: " + String(info || "unknown"));
+ }
+ 
++function createDecoder() {
++  const nextDecoder = new VideoDecoder({
++    output: (frame) => {
++      if (packetFormat === "scrcpy") scrcpyInFlight = Math.max(0, scrcpyInFlight - 1);
++      pendingFrames.push(frame);
++      if (pendingFrames.length > MAX_RENDER_QUEUE_SIZE + 1) {
++        while (pendingFrames.length > 1) pendingFrames.shift().close();
++      }
++      scheduleRender();
++      if (packetFormat === "scrcpy") drainScrcpyPackets();
++    },
++    error: (error) => self.postMessage({ error: String(error) }),
++  });
++  nextDecoder.ondequeue = drainScrcpyPackets;
++  return nextDecoder;
++}
++
+ self.onmessage = function (event) {
+   if (
+     event.data.canvas &&
+@@ -462,7 +512,7 @@ self.onmessage = function (event) {
+       displayHeight: event.data.displayHeight,
+       windowWidth: event.data.windowWidth,
+       windowHeight: event.data.windowHeight,
+-    });
++    }, true);
+ 
+     gl = offscreenCanvas.getContext("webgl2");
+     if (!gl) {
+@@ -473,34 +523,19 @@ self.onmessage = function (event) {
+     }
+ 
+     initializeGL(gl);
+-    decoder = new VideoDecoder({
+-      output: (frame) => {
+-        pendingFrames.push(frame);
+-        if (pendingFrames.length > MAX_RENDER_QUEUE_SIZE + 1) {
+-          while (pendingFrames.length > 1) {
+-            const staleFrame = pendingFrames.shift();
+-            if (staleFrame && staleFrame.close) {
+-              staleFrame.close();
+-            }
+-          }
+-        }
+-        scheduleRender();
+-      },
+-      error: (error) => {
+-        self.postMessage({
+-          error: String(error),
+-        });
+-      },
+-    });
++    decoder = createDecoder();
+   } else if (event.data.config) {
+     applyRuntimeConfig(event.data.config);
+   } else if (event.data.scrcpySession) {
+     closeAllPendingFrames();
++    clearScrcpyPackets();
++    scrcpyInFlight = 0;
+     spsPps = null;
+     dropDeltaUntilKeyframe = true;
+-    if (decoder && decoder.state !== "closed") decoder.reset();
++    if (!decoder || decoder.state === "closed") decoder = createDecoder();
++    else decoder.reset();
+     applyRuntimeConfig({ displayWidth: event.data.scrcpySession.width,
+-      displayHeight: event.data.scrcpySession.height });
++      displayHeight: event.data.scrcpySession.height }, true);
+   } else if (event.data.scrcpyPacket) {
+     handleScrcpyPacket(event.data.scrcpyPacket);
+   } else if (event.data.h264Data) {

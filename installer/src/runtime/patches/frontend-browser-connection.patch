@@ -1,0 +1,147 @@
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index 9561b59..2ecb491 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -28,6 +28,18 @@
+       return this._fetchJson(this.apiBaseUrl + "/browserAccess");
+     }
+ 
++    fetchBrowserConnection() {
++      return this._fetchJson(this.apiBaseUrl + '/browserConnection', {
++        headers: this.displaySession ? { 'X-Display-Session': this.displaySession.token } : {} });
++    }
++
++    saveBrowserConnection(payload) {
++      if (!this.displaySession) throw new Error('Browser connection session required');
++      return this._fetchJson(this.apiBaseUrl + '/browserConnection', { method: 'POST',
++        headers: { 'Content-Type': 'application/json', 'X-Display-Session': this.displaySession.token,
++          'X-Display-CSRF': this.displaySession.csrfToken }, body: JSON.stringify(payload) });
++    }
++
+     async saveBrowserAccess(payload, csrfToken, authorization) {
+       const response = await fetch(this.apiBaseUrl + "/browserAccess", {
+         method: "POST", cache: "no-store", credentials: "same-origin",
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index cafa522..9572ff4 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -26,6 +26,7 @@
+         { id: "audio", title: "Audio", icon: "speaker" },
+         { id: "gps", title: "GPS", icon: "gps_fixed" },
+         { id: "browserAccess", title: "Browser access", icon: "lock" },
++        { id: "browserConnection", title: "Browser connection", icon: "public" },
+         { id: "device", title: "Device", icon: "developer_board" },
+       ];
+ 
+@@ -61,6 +62,7 @@
+       if (this.content.dataset) delete this.content.dataset.vmDeviceInfo;
+       if (this.content.dataset) delete this.content.dataset.vmNetworkInfo;
+       if (this.content.dataset) delete this.content.dataset.vmDisplayControls;
++      if (this.content.dataset) delete this.content.dataset.browserConnection;
+ 
+       if (this.activeSectionId === "display") {
+         await this._renderDisplaySection(token);
+@@ -84,6 +86,59 @@
+       if (this.activeSectionId === "browserAccess") {
+         await this._renderBrowserAccessSection(token);
+       }
++      if (this.activeSectionId === 'browserConnection') await this._renderBrowserConnectionSection(token);
++    }
++
++    _connectionCanEdit() {
++      const state = this.displayController.remoteDisplayState;
++      return this.activeSectionId === 'browserConnection' && !this.connectionSettingsPending &&
++        state?.canControl === true && state.transactionStatus === 'idle' && !this.displayController.controlRequestInFlight;
++    }
++
++    _refreshConnectionAuthority() {
++      if (this.activeSectionId !== 'browserConnection') return;
++      for (const input of this.content.querySelectorAll('input, button')) input.disabled = !this._connectionCanEdit();
++    }
++
++    async _renderBrowserConnectionSection(token) {
++      this._appendLoadingState(); let state;
++      try { state = await this.apiClient.fetchBrowserConnection(); }
++      catch (_) {
++        if (token === this._renderToken && this.activeSectionId === 'browserConnection') this._renderErrorState('Browser connection unavailable');
++        return;
++      }
++      if (token !== this._renderToken || this.activeSectionId !== 'browserConnection') return;
++      this.content.innerHTML = ''; this.content.dataset.browserConnection = '1';
++      this._appendTile({ icon: 'public', title: 'Configured address', trailing: this._createTrailingText(state.origin), dense: false });
++      this._appendTile({ icon: 'verified_user', title: 'TLS certificate', trailing: this._createTrailingText('Managed by reverse proxy'), dense: false });
++      if (state.previousOrigin) this._appendTile({ icon: 'history', title: 'Previous address', trailing: this._createTrailingText(state.previousOrigin), dense: false });
++      const form = utils.createElement('form', 'settings-access-form', null);
++      const label = utils.createElement('label', 'settings-access-label', 'Hostname');
++      const hostname = utils.createElement('input', 'settings-access-input', null);
++      hostname.type = 'text'; hostname.value = state.hostname; hostname.maxLength = 256; hostname.required = true;
++      hostname.autocomplete = 'off'; hostname.spellcheck = false; hostname.id = 'connection-hostname'; label.htmlFor = hostname.id;
++      label.appendChild(hostname); form.appendChild(label);
++      const actions = utils.createElement('div', 'settings-connection-actions', null);
++      const apply = utils.createElement('button', 'settings-access-save', 'Apply'); apply.type = 'submit';
++      const defaults = utils.createElement('button', 'settings-access-save', 'Use default'); defaults.type = 'button';
++      defaults.addEventListener('click', () => {
++        if (token !== this._renderToken || !this._connectionCanEdit()) return;
++        hostname.value = new URL(state.defaultOrigin).hostname;
++      });
++      actions.appendChild(apply); actions.appendChild(defaults); form.appendChild(actions);
++      const status = utils.createElement('div', 'settings-access-status', null); status.setAttribute('role', 'status'); form.appendChild(status);
++      form.addEventListener('submit', async event => {
++        event.preventDefault();
++        if (token !== this._renderToken || !this._connectionCanEdit() || !form.checkValidity()) return;
++        this.connectionSettingsPending = true; this._refreshConnectionAuthority(); status.textContent = 'Saving';
++        try {
++          await this.apiClient.saveBrowserConnection({ revision: state.revision, hostname: hostname.value });
++          if (token === this._renderToken && this.activeSectionId === 'browserConnection') await this._renderActiveSection();
++        } catch (error) {
++          if (token === this._renderToken && this.activeSectionId === 'browserConnection') status.textContent = error.status === 409 ? 'Connection changed; reopen settings' : 'Connection could not be saved';
++        } finally { this.connectionSettingsPending = false; this._refreshConnectionAuthority(); }
++      });
++      this.content.appendChild(form); this._refreshConnectionAuthority();
+     }
+ 
+     async _renderBrowserAccessSection(token) {
+@@ -928,6 +983,7 @@
+     }
+ 
+     refreshDisplayControl(state) {
++      if (this.activeSectionId === 'browserConnection') { this._refreshConnectionAuthority(); return; }
+       if (this.activeSectionId === "display" && state.rearDisplayControlSupported === 1) {
+         const busy = this.rearSettingsPending || this.videoSettingsPending || this.displayController.controlRequestInFlight || state.transactionStatus !== "idle";
+         for (const input of this.content.querySelectorAll("[data-rear-role] input")) input.disabled = Boolean(busy);
+diff --git a/css/app.css b/css/app.css
+index 7defda1..c76f3ae 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -585,6 +585,31 @@
+     .settings-access-save:disabled { opacity: 0.6; cursor: default; }
+     .settings-access-status { margin-top: 12px; min-height: 24px; overflow-wrap: anywhere; }
+ 
++    .settings-connection-actions { display: flex; flex-wrap: wrap; gap: 12px; }
++    .settings-connection-actions button { min-height: 44px; }
++    [data-browser-connection] .settings-tile {
++      grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1.4fr);
++    }
++    [data-browser-connection] .settings-tile-content,
++    [data-browser-connection] .settings-tile-trailing {
++      min-width: 0;
++      overflow-wrap: anywhere;
++    }
++    [data-browser-connection] .settings-trailing-text {
++      max-width: 100%;
++      white-space: normal;
++      overflow-wrap: anywhere;
++      overflow: visible;
++      text-overflow: clip;
++    }
++    @media (max-width: 480px) {
++      [data-browser-connection] .settings-tile { grid-template-columns: 34px minmax(0, 1fr); row-gap: 4px; }
++      [data-browser-connection] .settings-tile-leading { grid-row: 1 / span 2; }
++      [data-browser-connection] .settings-tile-content { grid-column: 2; grid-row: 1; }
++      [data-browser-connection] .settings-tile-trailing { grid-column: 2; grid-row: 2; justify-content: flex-start; }
++      [data-browser-connection] .settings-trailing-text { text-align: left; }
++    }
++
+     .settings-tile {
+       display: grid;
+       grid-template-columns: 34px 1fr minmax(190px, auto);

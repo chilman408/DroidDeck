@@ -1,0 +1,47 @@
+diff --git a/download.sh b/download.sh
+--- a/download.sh
++++ b/download.sh
+@@ -1,7 +1,8 @@
+ #!/bin/bash
++set -eo pipefail
+ 
+ # URL for the GitHub release page
+-RELEASE_URL="https://github.com/BlissOS/aaropa_rootfs/releases/latest"
++RELEASE_URL="https://github.com/BlissOS/aaropa_rootfs/releases/download/r101"
+ 
+ # Get the script's directory and change to it
+ SCRIPT_DIR=$(dirname "$0")
+@@ -17,5 +18,17 @@ FILES=(
+   "boot_hybrid.img"
+ )
+ 
++verify_download() {
++  local expected
++  case "$1" in
++    boot_hybrid.img) expected=2d3027be0a695db635d0bdccaf0a5184636956a0769bb634f26429908c9cfd1d ;;
++    grub-rescue.iso) expected=0dced7cc6d9dd0f4a458f27671c59753ea70345b87072e230b34f5296df368cd ;;
++    initrd_lib.tar.gz) expected=963fb3d236bd68d81bb4537785a1218c5829593e90681fdbf875e8537e5861e1 ;;
++    install.sfs) expected=2c53795b3795b4bb40bdfc2755f02b028a6e7d8c6ae193f0df9a45926a6ef6d9 ;;
++    *) echo "Unexpected installer asset: $1" >&2; return 1 ;;
++  esac
++  printf '%s  %s\n' "$expected" "$1" | sha256sum -c -
++}
++
+ # Function to remove existing files from the FILES list and directories
+ remove_existing_files() {
+@@ -42,11 +55,13 @@ download_with_aria2() {
+   local file="$1"
+   echo "Downloading $file using aria2c..."
+-  aria2c -x 16 -s 16 "$RELEASE_URL/download/$file"
++  aria2c -x 16 -s 16 "$RELEASE_URL/$file"
++  verify_download "$file"
+ }
+ 
+ # Function to download files using wget
+ download_with_wget() {
+   local file="$1"
+   echo "Downloading $file using wget..."
+-  wget "$RELEASE_URL/download/$file"
++  wget "$RELEASE_URL/$file"
++  verify_download "$file"
+ }

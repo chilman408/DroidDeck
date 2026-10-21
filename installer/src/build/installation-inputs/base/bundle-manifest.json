@@ -1,0 +1,389 @@
+{
+  "version": 1,
+  "product": "DroidDeck",
+  "kind": "runtime-source-component",
+  "installable": false,
+  "sourceRevision": "76c89fbb8de9a672a9ec843808f9eca6fd8c9528",
+  "files": [
+    {
+      "path": "browser-connection/helper.js",
+      "size": 7822,
+      "sha256": "31ff950f338b98663e9068552ffc4eed82e34e138abcead583b88582eba150ea"
+    },
+    {
+      "path": "browser-connection/policy.js",
+      "size": 1825,
+      "sha256": "e71f0bb2b3193716d40a9d52bd64334265d79c499e6c9531d9f06a79f9306cbb"
+    },
+    {
+      "path": "browser-connection/proxy-store.js",
+      "size": 3615,
+      "sha256": "90139347d5f8559fa092b8c800526618d334bf3cccc1e5eff53bd6f307fcffa7"
+    },
+    {
+      "path": "browser-connection/socket-startup.js",
+      "size": 3263,
+      "sha256": "d8e8059f40d049cca53d4b6189ad9ba274ccd440d85e0316407b15a4d0249f0a"
+    },
+    {
+      "path": "browser-connection/tls-import.js",
+      "size": 5880,
+      "sha256": "8e1b25579691e256058248200d2590e86fefcd66a437057afda1529c7eaddb59"
+    },
+    {
+      "path": "portable/configuration-generation.js",
+      "size": 725,
+      "sha256": "971154e50a16d556c1488695b9a15467600ffdba55fdcb3e2bb29e53a59ff78b"
+    },
+    {
+      "path": "portable/desktop-preflight.js",
+      "size": 1558,
+      "sha256": "82f8f26e85e5cca51533c6067c157575bf1a4cf5f57d91660e14899a4947b879"
+    },
+    {
+      "path": "portable/gpu-access.js",
+      "size": 7366,
+      "sha256": "535bc40267cd1fd624a5e0e6fb7f190f569a2e17fc4542a64bb4c54fea91cf0a"
+    },
+    {
+      "path": "portable/protected-config.js",
+      "size": 2013,
+      "sha256": "6705ee851a739c0b2a7465a2ac4ce9613186783dd2d6f86ba3e3ce11af066b13"
+    },
+    {
+      "path": "portable/read-bounded.js",
+      "size": 1265,
+      "sha256": "91eb96125edddb2f5f49b87732bf9c36f5342ff882b5f67a7c0a855e41071a56"
+    },
+    {
+      "path": "portable/runtime-account.js",
+      "size": 2043,
+      "sha256": "bfafd5f1e2525cc2e3597322ac03a26899748ba10fc0283962e5fc4807b43b5d"
+    },
+    {
+      "path": "portable/runtime-config.js",
+      "size": 3656,
+      "sha256": "dc87ee44c58eecfb8fa73db775f99223be7180e24ba3d039fc81e1bba5ae79ce"
+    },
+    {
+      "path": "portable/worker-config.js",
+      "size": 1197,
+      "sha256": "b5732a4a96ce8b9731d01f12f6f598f1c73e33450e3acc8dd218a8ffaa963e17"
+    },
+    {
+      "path": "portable/worker-entry.js",
+      "size": 2745,
+      "sha256": "13efb119f4a3a14de4f29eea004b4c9786a199c67f47aed2a4f8ce0de3159ec1"
+    },
+    {
+      "path": "preview-gateway/audio-gain.js",
+      "size": 2742,
+      "sha256": "ef746a3f454dc6ffeff95c533d5bfed3489d7760e041d546610b896e1a4d9065"
+    },
+    {
+      "path": "preview-gateway/audio-launcher.js",
+      "size": 3418,
+      "sha256": "b2d9774d7f008be9b608673f14c53eba1ec179319fb309c0192d7b5063f9870d"
+    },
+    {
+      "path": "preview-gateway/audio-relay.js",
+      "size": 5357,
+      "sha256": "21d5570ba8e96b6d684f5bff7066e09930e931f9bc146d58f06e6f08d16bc030"
+    },
+    {
+      "path": "preview-gateway/audio-settings.js",
+      "size": 1957,
+      "sha256": "49675b0d4b2d99f2a491c5961ca91c6f4b29204e6f312126be16b81c4e0ee7fc"
+    },
+    {
+      "path": "preview-gateway/audio-stream.js",
+      "size": 2350,
+      "sha256": "3729cb92e3d7210c3f1cd38988c74595b9b8541cd1b6ca48f6719b15afcb5fd8"
+    },
+    {
+      "path": "preview-gateway/browser-access.js",
+      "size": 5153,
+      "sha256": "138da14955fc2e7af9f8cff2f001898030585c21e867c0cf9fb4cef01ece602c"
+    },
+    {
+      "path": "preview-gateway/capture-layout.js",
+      "size": 1072,
+      "sha256": "992ce6c1209f9b7686ad700a0559bdc9b73610326679eb46628b3ea035e8faa7"
+    },
+    {
+      "path": "preview-gateway/capture-lease.js",
+      "size": 1362,
+      "sha256": "2f99cf137f8dc80306fb7bf46402b48cb52d17056268490803b0d3b8e13745cc"
+    },
+    {
+      "path": "preview-gateway/compositor-h264.py",
+      "size": 7885,
+      "sha256": "6b6663872929dce54d458fdbb415045c02ee81578185cbb5a7bc9695fae11f69"
+    },
+    {
+      "path": "preview-gateway/compositor-video-launcher.js",
+      "size": 8472,
+      "sha256": "b9182e9993a09918a166ffbbc779141833625383cb7d77eccbf8ea4d52758edc"
+    },
+    {
+      "path": "preview-gateway/device-info.js",
+      "size": 3024,
+      "sha256": "e15c436b1787bc17aa4cd7c3646d30720a2c114e3b661159fd9201cf1a030fbd"
+    },
+    {
+      "path": "preview-gateway/display-control.js",
+      "size": 13716,
+      "sha256": "7d0c3d953b07c18120f13b9acd076ce416cc98b2572bcbbd41697a8ca23a3c90"
+    },
+    {
+      "path": "preview-gateway/display-helper-client.js",
+      "size": 3095,
+      "sha256": "934ea5cc04b3c8c97e55c7a34c078412d45b51e067c7320efeade1c20a479dfc"
+    },
+    {
+      "path": "preview-gateway/gps-control.js",
+      "size": 6746,
+      "sha256": "4e55f4a55cded8e5e1e1346989b8c9c238ae2f364c0b73c55bdec11fa7fe2ed1"
+    },
+    {
+      "path": "preview-gateway/gps-helper-client.js",
+      "size": 3327,
+      "sha256": "fabe34c53f6f8eb41807822d5a3aabc78025ed86bfd996d94fd094b7d0f05cbb"
+    },
+    {
+      "path": "preview-gateway/gps-location.js",
+      "size": 3670,
+      "sha256": "e802251e9ae814d3d0324a130997a5273206bae6e425315050e67b2c075a50b3"
+    },
+    {
+      "path": "preview-gateway/h264-relay.js",
+      "size": 6643,
+      "sha256": "ca993d2797fbca7bbfe4f8f081db15a7777b135fb36e02d0325e3fe26f7a7194"
+    },
+    {
+      "path": "preview-gateway/package-lock.json",
+      "size": 7529,
+      "sha256": "6dcd7347aa12def63cd943a6336cb0648c657e72fea911e7cc7f8716b94c794f"
+    },
+    {
+      "path": "preview-gateway/package.json",
+      "size": 378,
+      "sha256": "b81858425ecda17351ae3a16173e9383b3dcd9eff61dd0b8000a729b4507bd3b"
+    },
+    {
+      "path": "preview-gateway/rear-display-settings.js",
+      "size": 3557,
+      "sha256": "09f5e59b4cc566424ec84a9d0e4bddd705ca77ff5e727d5404ae06e114073c6c"
+    },
+    {
+      "path": "preview-gateway/runtime-probe.js",
+      "size": 7318,
+      "sha256": "bba2d21500dc89ab97b115125cacd70eb2a47e9233ec954028861c1fc0466b30"
+    },
+    {
+      "path": "preview-gateway/scrcpy-stream.js",
+      "size": 2079,
+      "sha256": "52b157f0dd91e9070f5a50321b23564480cc5cf17db20f57a92f7058acc57294"
+    },
+    {
+      "path": "preview-gateway/server.js",
+      "size": 41405,
+      "sha256": "6dca1547a47335a783f103ab02c5c366ac759daf30551e86993e9021861f507d"
+    },
+    {
+      "path": "preview-gateway/video-capture-controller.js",
+      "size": 2469,
+      "sha256": "9a51072417802186b672fe2843cc562930f784b3ab76a6039e6a6192f5b8c061"
+    },
+    {
+      "path": "preview-gateway/video-launcher.js",
+      "size": 6213,
+      "sha256": "18a01478a6e0f5ead9f32b956a4bcb8d33173df5a5268a49e02ab71933dfed8c"
+    },
+    {
+      "path": "preview-gateway/video-settings.js",
+      "size": 3277,
+      "sha256": "73cb85b2b7a103f549b74a95fb4e7ef6152bb8c917f3603189e803b741604767"
+    },
+    {
+      "path": "waydroid-display/compositor-source.js",
+      "size": 1915,
+      "sha256": "5d86e9fb72c64ef844b8318ac0f39d1900b989d28af41be1483c89b691e1b64b"
+    },
+    {
+      "path": "waydroid-display/frame-check.js",
+      "size": 1034,
+      "sha256": "9347f9e5c6e496ffe566a588bf2913aafc42e0ee00284033fdfc73883faee5f6"
+    },
+    {
+      "path": "waydroid-display/gps-helper.js",
+      "size": 6566,
+      "sha256": "16e4dcbf19a26e8d9a9146288b2f186ba98b662653c44f05dc8a943046d54843"
+    },
+    {
+      "path": "waydroid-display/gps-lifecycle.js",
+      "size": 5298,
+      "sha256": "439e4e79e4813bb80e4f3a803abf2c62c73305a370cffa80260bb17c56a84dd3"
+    },
+    {
+      "path": "waydroid-display/gps-protocol.js",
+      "size": 2120,
+      "sha256": "bc2e740fd2eeea8d4672c0f41de5c55cf82194e93596959a472fa8f575f48ded"
+    },
+    {
+      "path": "waydroid-display/gps-store.js",
+      "size": 2938,
+      "sha256": "11fafc097240f178a402d2138a2cfc5308b0465a9623796f01bd9f9330785bbb"
+    },
+    {
+      "path": "waydroid-display/graphics-restart.js",
+      "size": 1881,
+      "sha256": "5b96c99fcd7076b0fe8610151466a27e8877aa5ff39570956d0ef84a10f7d9cf"
+    },
+    {
+      "path": "waydroid-display/headless-session-preflight.js",
+      "size": 5370,
+      "sha256": "2d1942297b147a2ec85f2ae9f9accd5197893149f2535e18afce9b02f4c0c379"
+    },
+    {
+      "path": "waydroid-display/helper.js",
+      "size": 6450,
+      "sha256": "1a06a233deb2778f97b5e6aa2c61db273bb4b2b24d6650f400aba50ce2ace79c"
+    },
+    {
+      "path": "waydroid-display/host-adapter.js",
+      "size": 9490,
+      "sha256": "6b9f2518b8549ba9528dcb8d3cbe13a754aafda053742d2e62cd4d088ed2cac8"
+    },
+    {
+      "path": "waydroid-display/location-adapter.js",
+      "size": 3329,
+      "sha256": "d347fe25485a50f6412642ac6d019565600218697d135ca8fb6a0f91405f2d83"
+    },
+    {
+      "path": "waydroid-display/logical-screencap.sh",
+      "size": 617,
+      "sha256": "fe31295243f7e8f8440d4e59c4daddb06c0da26c4a310b284b7769eaf7bd6a9a"
+    },
+    {
+      "path": "waydroid-display/native-stop.py",
+      "size": 5920,
+      "sha256": "c9484d7a6eba5cb24f5899614548cc1cce257bc6de61748dfe2750e82fed02e0"
+    },
+    {
+      "path": "waydroid-display/package-lock.json",
+      "size": 642,
+      "sha256": "e85d82dc2276d9367edfb2273d7d2fc58c656d651c823d858b93f80c07f6d41f"
+    },
+    {
+      "path": "waydroid-display/package.json",
+      "size": 196,
+      "sha256": "dadda34469dc81a6c38eaba5a633a336e266ca6fca38d6a87cdefdd05dce992a"
+    },
+    {
+      "path": "waydroid-display/pid-compat-hook.js",
+      "size": 2299,
+      "sha256": "acd003a54bd63099f6fe900d6f37a85992e080ffe11b3a612ac3cb08dc0a2f90"
+    },
+    {
+      "path": "waydroid-display/pid-compat.js",
+      "size": 5764,
+      "sha256": "bc0e78e71baec68a21fe84ecc5a3a3d535a103435688bbea912486af07babb61"
+    },
+    {
+      "path": "waydroid-display/probe.js",
+      "size": 4033,
+      "sha256": "93143ed63e92c2308063cbc57a3894706c8a576ee0dd91d0f381a72a2120bfe7"
+    },
+    {
+      "path": "waydroid-display/runtime-commands.js",
+      "size": 6200,
+      "sha256": "26c4f13ebb59a4a95036e48dd324107e008d4ccabca5121b64f32a3cd27d39d1"
+    },
+    {
+      "path": "waydroid-display/runtime-discovery.js",
+      "size": 6470,
+      "sha256": "09bbdf0c203fa1987e6dfbc8b44eb6b49b33316372879d9caeeba1b04c4feaf7"
+    },
+    {
+      "path": "waydroid-display/runtime-lock.js",
+      "size": 720,
+      "sha256": "006b4f2bfaea6de57ee5253ad7107939af7a862660c4e5c72c1a2b608c634ce8"
+    },
+    {
+      "path": "waydroid-display/runtime-loop.js",
+      "size": 1533,
+      "sha256": "6e393aa25f1547a468c90e021778cd515a2133bd292340c7372c3668ab5a0df9"
+    },
+    {
+      "path": "waydroid-display/runtime-main.js",
+      "size": 4771,
+      "sha256": "64464240d9587a516654f7594b9d9c069075cc5870cab150b6532df5dceba78e"
+    },
+    {
+      "path": "waydroid-display/runtime-native.js",
+      "size": 4526,
+      "sha256": "d1fa5bfe53a33273f4decbdd4bf50fb9a1b9fb850081948c3eb74438419da9fb"
+    },
+    {
+      "path": "waydroid-display/runtime-ownership.js",
+      "size": 6722,
+      "sha256": "d61901b6fac9113e0fc1ddbedec2d175c258b541d467addb68cffc3724c28daf"
+    },
+    {
+      "path": "waydroid-display/runtime-preflight.js",
+      "size": 4327,
+      "sha256": "f785a9b3b66bfe3c6073dd0164b2f28a47b39b99f56c520d511e87c438875ec1"
+    },
+    {
+      "path": "waydroid-display/runtime-readiness.js",
+      "size": 2940,
+      "sha256": "ff29ebec203143dab73cc869e3d1a131c60c5026eae94e28cfbf9b6336dc2282"
+    },
+    {
+      "path": "waydroid-display/runtime-supervisor.js",
+      "size": 3411,
+      "sha256": "8b8010b779e26d9ce9c04d15535382ff5264e109ddbf8c28df14ca89ea6a2a4e"
+    },
+    {
+      "path": "waydroid-display/session-lifecycle.js",
+      "size": 868,
+      "sha256": "06ca7397ff135572f3a3996ecc3bde9c26c67a543f298f43a8999f5461877028"
+    },
+    {
+      "path": "waydroid-display/session-preflight.js",
+      "size": 1038,
+      "sha256": "a9bc4e36001d1cd5622bfd2e20d94b0e0376ee89291bbd07ceb56a7b2abff16f"
+    },
+    {
+      "path": "waydroid-display/session-probe.js",
+      "size": 17460,
+      "sha256": "8b362cb4270d560bc118e1613c439f15e9347e8a426a83f1e5e8ca5d39a970bf"
+    },
+    {
+      "path": "waydroid-display/session-recovery.js",
+      "size": 5644,
+      "sha256": "f468bae50d7d15faebace8abe0a38d6a90618083c93acd90b2b226fc9f6f24d8"
+    },
+    {
+      "path": "waydroid-display/store.js",
+      "size": 2230,
+      "sha256": "ca2baf7052041c69a4b5a2e694893353e8be89dfe3fb0cda41e0d82c77330eaf"
+    },
+    {
+      "path": "waydroid-display/touch-adapter.js",
+      "size": 8647,
+      "sha256": "46c4e56bfa0987f9366b82bb8080c11ee12a0d065f93ad2cb3aa0ba12a010bba"
+    },
+    {
+      "path": "waydroid-display/touch-geometry.js",
+      "size": 1016,
+      "sha256": "3f926b7995a424daae1c42fd38290387c86ac253be76c316f8438960a7d0bff1"
+    },
+    {
+      "path": "waydroid-display/transaction.js",
+      "size": 7810,
+      "sha256": "a57d431ca7abeb57df7a06ad24ddda3196c100dd25a6afcb58bcaeced7a77f5a"
+    }
+  ]
+}

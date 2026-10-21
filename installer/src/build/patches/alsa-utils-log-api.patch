@@ -1,0 +1,46 @@
+diff --git a/alsactl/alsactl.c b/alsactl/alsactl.c
+--- a/alsactl/alsactl.c
++++ b/alsactl/alsactl.c
+@@ -460,4 +460,4 @@
+ 	}
+ 
+-#if SND_LIB_VER(1, 2, 15) < SND_LIB_VERSION
++#if SND_LIB_VER(1, 2, 15) > SND_LIB_VERSION
+ 	snd_lib_error_set_handler(error_handler);
+diff --git a/alsactl/utils.c b/alsactl/utils.c
+--- a/alsactl/utils.c
++++ b/alsactl/utils.c
+@@ -194,4 +194,4 @@
+ }
+ 
+-#if SND_LIB_VER(1, 2, 15) >= SND_LIB_VERSION
++#if SND_LIB_VER(1, 2, 15) <= SND_LIB_VERSION
+ void log_handler(int prio, int interface, const char *file, int line, const char *function, int errcode, const char *fmt, va_list arg)
+diff --git a/alsamixer/mainloop.c b/alsamixer/mainloop.c
+--- a/alsamixer/mainloop.c
++++ b/alsamixer/mainloop.c
+@@ -35,4 +35,4 @@
+ static WINDOW *curses_initialized;
+ 
+-#if SND_LIB_VER(1, 2, 15) < SND_LIB_VERSION
++#if SND_LIB_VER(1, 2, 15) > SND_LIB_VERSION
+ static void black_hole_error_handler(const char *file ATTRIBUTE_UNUSED,
+@@ -70,3 +70,3 @@
+ 
+-#if SND_LIB_VER(1, 2, 15) < SND_LIB_VERSION
++#if SND_LIB_VER(1, 2, 15) > SND_LIB_VERSION
+ 	snd_lib_error_set_handler(black_hole_error_handler);
+diff --git a/seq/aconnect/aconnect.c b/seq/aconnect/aconnect.c
+--- a/seq/aconnect/aconnect.c
++++ b/seq/aconnect/aconnect.c
+@@ -33,4 +33,4 @@
+ 
+ 
+-#if SND_LIB_VER(1, 2, 15) < SND_LIB_VERSION
++#if SND_LIB_VER(1, 2, 15) > SND_LIB_VERSION
+ static void error_handler(const char *file, int line, const char *function, int errcode, const char *fmt, ...)
+@@ -370,3 +370,3 @@
+ 
+-#if SND_LIB_VER(1, 2, 15) < SND_LIB_VERSION
++#if SND_LIB_VER(1, 2, 15) > SND_LIB_VERSION
+ 	snd_lib_error_set_handler(error_handler);

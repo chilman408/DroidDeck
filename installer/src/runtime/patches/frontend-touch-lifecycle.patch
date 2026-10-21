@@ -1,0 +1,33 @@
+diff --git a/js/touchscreen/touchscreen-controller.js b/js/touchscreen/touchscreen-controller.js
+index 12af5ab..ffd5b33 100644
+--- a/js/touchscreen/touchscreen-controller.js
++++ b/js/touchscreen/touchscreen-controller.js
+@@ -97,7 +97,8 @@
+         "pointerdown",
+         (event) => {
+           event.preventDefault();
+-          if (!this._isSocketOpen()) {
++          if (!this._isSocketOpen() || this._getSlotByTrackingId(event.pointerId) ||
++              (event.pointerType === "mouse" && event.button !== 0)) {
+             return;
+           }
+ 
+@@ -187,6 +188,9 @@
+       this.touchLayer.addEventListener("pointercancel", onPointerUpOrCancel, {
+         passive: false,
+       });
++      this.touchLayer.addEventListener("lostpointercapture", onPointerUpOrCancel, {
++        passive: false,
++      });
+       this.touchLayer.addEventListener(
+         "pointerleave",
+         () => {
+@@ -241,6 +245,8 @@
+ 
+       if (x < 0) x = 0;
+       if (y < 0) y = 0;
++      x = Math.min(x, touchscreenSize.width - 1);
++      y = Math.min(y, touchscreenSize.height - 1);
+ 
+       return { x, y };
+     }

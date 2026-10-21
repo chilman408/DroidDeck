@@ -1,0 +1,19 @@
+diff --git a/runtime/preview-gateway/server.js b/runtime/preview-gateway/server.js
+index b39c267..f4cbd02 100644
+--- a/runtime/preview-gateway/server.js
++++ b/runtime/preview-gateway/server.js
+@@ -269,10 +269,12 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
+         catch { throw Object.assign(new Error("Invalid JSON"), { status: 400 }); }
+         let state;
+         if (pathname === "/api/displayRole") {
+-          if (!payload || Array.isArray(payload) || Object.keys(payload).length !== 1 || !("role" in payload)) {
++          const fields = payload && Object.keys(payload).sort().join(',');
++          if (!payload || Array.isArray(payload) || !['role', 'claim,generation,role'].includes(fields)) {
+             throw Object.assign(new Error("One display role required"), { status: 400 });
+           }
+-          state = await displayControl.registerRole(token, payload.role, csrf);
++          state = await displayControl.registerRole(token, payload.role, csrf,
++            fields === 'role' ? {} : { claim: payload.claim, generation: payload.generation });
+         } else state = await displayControl.updateRearSettings(token, payload, csrf);
+         if (access && generation !== access.snapshot().csrfToken) throw Object.assign(new Error("Access changed"), { status: 403 });
+         displayControl.snapshot(token);

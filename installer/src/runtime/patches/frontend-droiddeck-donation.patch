@@ -1,0 +1,28 @@
+diff --git a/index.html b/index.html
+index 61735a6..f81d4ad 100644
+--- a/index.html
++++ b/index.html
+@@ -91,13 +91,17 @@
+         <div class="page-center">
+           <div class="donation-content">
+             <div class="donation-text">
+-              Thank you for considering a donation to support the ongoing development of Tesla Android. As a community-founded project, your contribution can truly make a difference!
++              This is a self funded project, your contribution means the world to me!
+             </div>
+-            <img
+-              class="donation-qr"
+-              alt="Donations QR code"
+-              src="./assets/donations-qr.svg"
+-            />
++            <a href="https://www.paypal.com/donate/?business=TFWNLUC7ZGSPS&amp;no_recurring=0&amp;item_name=Thank+you+for+your+support%21++I+appreciate+it.&amp;currency_code=USD" target="_blank" rel="noopener noreferrer" aria-label="Donate with PayPal">
++              <img
++                class="donation-qr"
++                alt="PayPal donation QR code"
++                src="./assets/donations-qr.svg"
++                width="250"
++                height="250"
++              />
++            </a>
+           </div>
+         </div>
+       </section>

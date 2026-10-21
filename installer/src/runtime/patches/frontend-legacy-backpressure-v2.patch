@@ -1,0 +1,122 @@
+diff --git a/js/display/renderers/h264-broadway/h264Brodway.js b/js/display/renderers/h264-broadway/h264Brodway.js
+index 832da54..f73f6c3 100644
+--- a/js/display/renderers/h264-broadway/h264Brodway.js
++++ b/js/display/renderers/h264-broadway/h264Brodway.js
+@@ -104,3 +104,3 @@ var worker = null;
+ try {
+-  worker = createWorkerWithFileFallback("./js/display/renderers/h264-broadway/h264BrodwayWorker.js", {
++  worker = createWorkerWithFileFallback("./js/display/renderers/h264-broadway/h264BrodwayWorker.js?taQueue=2", {
+     dependencies: [
+@@ -152,3 +152,14 @@ window.addEventListener("resize", function () {
+ if (worker) {
++  worker.onerror = worker.onmessageerror = function (event) {
++    event.preventDefault?.(); failLegacyWorker("worker-error");
++  };
+   worker.onmessage = function (event) {
++    if (legacyFailed) return;
++    if (event.data.h264QueueReady === 2) { legacyWorkerReady = true; drainLegacyQueue(); }
++    if (event.data.h264Processed === true) {
++      var key = event.data.h264Epoch + ":" + event.data.h264Ticket;
++      if (legacyInFlight.has(key)) {
++        clearTimeout(legacyInFlight.get(key)); legacyInFlight.delete(key); drainLegacyQueue();
++      }
++    }
+     if (event.data.frameRendered) {
+@@ -170,4 +181,46 @@ window.addEventListener("beforeunload", function () {
+ var legacyConfig = null;
++var legacyEpoch = 0;
++var legacyTicket = 0;
++var legacyInFlight = new Map();
++var legacyFailed = false;
++var legacyAwaitKeyframe = true;
++var legacyWorkerReady = false;
++var legacyQueue = [];
++var legacyQueueBytes = 0;
++var legacyPendingReset = null;
++function drainLegacyQueue() {
++  if (!legacyWorkerReady || legacyFailed) return;
++  if (legacyPendingReset) {
++    if (legacyInFlight.size) return;
++    worker.postMessage({ streamReset: legacyPendingReset }); legacyPendingReset = null;
++  }
++  while (legacyInFlight.size < 2 && legacyQueue.length) {
++    var buffer = legacyQueue.shift(); legacyQueueBytes -= buffer.byteLength;
++    var ticket = ++legacyTicket;
++    var key = legacyEpoch + ":" + ticket;
++    legacyInFlight.set(key, typeof setTimeout === "function" ? setTimeout(function () {
++      failLegacyWorker("worker-stalled");
++    }, 5000) : null);
++    worker.postMessage({ h264Data: buffer, h264Epoch: legacyEpoch, h264Ticket: ticket }, [buffer]);
++  }
++}
++function failLegacyWorker(state) {
++  if (legacyFailed) return;
++  legacyFailed = true; legacyWorkerReady = false;
++  legacyQueue = []; legacyQueueBytes = 0; legacyPendingReset = null;
++  legacyInFlight.forEach(function (timer) { clearTimeout(timer); }); legacyInFlight.clear();
++  worker?.terminate(); canvas.dataset.videoState = state;
++  // One cache-busted reload, never an incompatible decoder or reload loop.
++  if (typeof window.location?.href === "string") {
++    var reload = new URL(window.location.href);
++    if (reload.searchParams.get("taLegacyQueue") !== "2") {
++      reload.searchParams.set("taLegacyQueue", "2"); window.location.replace(reload.href);
++    }
++  }
++}
++if (typeof setTimeout === "function") setTimeout(function () {
++  if (!legacyWorkerReady) failLegacyWorker("worker-protocol-error");
++}, 5000);
+ function drawDisplayFrame(arrayBuffer) {
+-  if (!worker) {
++  if (!worker || legacyFailed) {
+     return;
+@@ -183,3 +236,6 @@ function drawDisplayFrame(arrayBuffer) {
+       legacyConfig = null;
+-      worker.postMessage({ streamReset: metadata });
++      legacyEpoch++;
++      legacyQueue = []; legacyQueueBytes = 0;
++      legacyAwaitKeyframe = true;
++      legacyPendingReset = metadata; drainLegacyQueue();
+       return;
+@@ -196,3 +252,7 @@ function drawDisplayFrame(arrayBuffer) {
+     if (!legacyConfig) return;
+-    if (bytes[0] & 0x20) {
++    var isKeyframe = Boolean(bytes[0] & 0x20);
++    if (legacyAwaitKeyframe && !isKeyframe) return;
++    if (isKeyframe) {
++      // Keep the newest complete GOP when decoding falls behind live arrivals.
++      legacyQueue = []; legacyQueueBytes = 0;
+       var accessUnit = new Uint8Array(legacyConfig.length + payload.length);
+@@ -200,3 +260,12 @@ function drawDisplayFrame(arrayBuffer) {
+       arrayBuffer = accessUnit.buffer;
++      legacyAwaitKeyframe = false;
+     } else arrayBuffer = payload.slice().buffer;
++    if (legacyQueue.length >= 120 || legacyQueueBytes + arrayBuffer.byteLength > 2 * 1024 * 1024) {
++      legacyQueue = []; legacyQueueBytes = 0; legacyAwaitKeyframe = true;
++      if (typeof window.requestDisplayStreamReconnect === "function") window.requestDisplayStreamReconnect();
++      return;
++    }
++    legacyQueue.push(arrayBuffer); legacyQueueBytes += arrayBuffer.byteLength;
++    drainLegacyQueue();
++    return;
+   }
+diff --git a/js/display/renderers/h264-broadway/h264BrodwayWorker.js b/js/display/renderers/h264-broadway/h264BrodwayWorker.js
+index 152bac1..9ef82bf 100644
+--- a/js/display/renderers/h264-broadway/h264BrodwayWorker.js
++++ b/js/display/renderers/h264-broadway/h264BrodwayWorker.js
+@@ -264,2 +264,3 @@ self.onmessage = function (event) {
+     resetDecoder();
++    self.postMessage({ h264QueueReady: 2, width, height });
+   } else if (event.data.streamReset) {
+@@ -270,3 +271,10 @@ self.onmessage = function (event) {
+   } else if (event.data.h264Data) {
+-    handleEncodedData(new Uint8Array(event.data.h264Data));
++    try {
++      handleEncodedData(new Uint8Array(event.data.h264Data));
++    } finally {
++      if (Number.isSafeInteger(event.data.h264Epoch) && event.data.h264Epoch >= 0 &&
++          Number.isSafeInteger(event.data.h264Ticket) && event.data.h264Ticket > 0) {
++        self.postMessage({ h264Processed: true, h264Epoch: event.data.h264Epoch, h264Ticket: event.data.h264Ticket });
++      }
++    }
+   }

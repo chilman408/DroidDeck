@@ -1,0 +1,33 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+COPY build/meson-requirements.txt /tmp/meson-requirements.txt
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates software-properties-common \
+    && add-apt-repository -y universe \
+    && add-apt-repository -y multiverse \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       aapt bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+       genisoimage gettext git git-lfs glslang-tools gnupg gperf kmod lib32z1-dev \
+       libc6-dev-i386 libelf-dev libgl1-mesa-dev libncurses-dev libncurses5 libncurses6 libncurses6:i386 \
+       libssl-dev libtinfo5 libx11-dev libxml2-utils lunzip nasm ninja-build \
+       pkg-config python3 python3-mako python3-ply python3-pycparser python3-venv python3-yaml \
+       rdfind rsync squashfs-tools syslinux syslinux-utils \
+       unzip wget xmlstarlet xorriso xsltproc zip zlib1g-dev zstd \
+    && python3 -m venv --system-site-packages /opt/meson \
+    && /opt/meson/bin/pip install --no-deps --require-hashes --only-binary=:all: -r /tmp/meson-requirements.txt \
+    && /opt/meson/bin/meson --version | grep -Fx 1.4.1 \
+    && curl -fL --retry 3 --output /tmp/cbindgen https://github.com/mozilla/cbindgen/releases/download/0.28.0/cbindgen \
+    && echo '94a94848bbfb7b0eb8dfd6f3b8093331913faee3bb61d3f42e21a2dcf693e3d2  /tmp/cbindgen' | sha256sum -c - \
+    && install -m 755 /tmp/cbindgen /usr/local/bin/cbindgen \
+    && cbindgen --version | grep -Fx 'cbindgen 0.28.0' \
+    && git clone --quiet --depth=1 --branch v2.68.1 https://gerrit.googlesource.com/git-repo /tmp/git-repo \
+    && test "$(git -C /tmp/git-repo rev-parse HEAD)" = e1e215a14ea5373419acb8753b6865de19d1f122 \
+    && install -m 755 /tmp/git-repo/repo /usr/local/bin/repo \
+    && repo init --help | grep -q -- --git-lfs \
+    && rm -rf /tmp/cbindgen /tmp/git-repo /tmp/meson-requirements.txt /var/lib/apt/lists/*
+
+ENV PATH="/opt/meson/bin:${PATH}"
+WORKDIR /workspace

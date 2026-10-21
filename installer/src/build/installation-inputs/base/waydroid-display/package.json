@@ -1,0 +1,8 @@
+{
+  "name": "teslaandroid-waydroid-display",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "scripts": { "test": "node --test" },
+  "dependencies": { "pngjs": "7.0.0" }
+}

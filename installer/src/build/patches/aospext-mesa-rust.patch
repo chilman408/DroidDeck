@@ -1,0 +1,11 @@
+diff --git a/tools/meson_aosp_cross.cfg b/tools/meson_aosp_cross.cfg
+--- a/tools/meson_aosp_cross.cfg
++++ b/tools/meson_aosp_cross.cfg
+@@ -18,6 +18,6 @@ strip = llvm_dir / 'llvm-strip'
+ c = toolchain_dir / 'wrap_clang'
+ cpp = toolchain_dir / 'wrap_clang++'
+-rust = ['rustc', '--target', '$(MESON_RUST_TARGET)']
++rust = ['rustc', '-C', 'panic=abort', '--target', '$(MESON_RUST_TARGET)']
+ c_ld = 'lld'
+ cpp_ld = 'lld'
+ rust_ld = toolchain_dir / 'wrap_rust_ld'

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "kind": "external-image-inputs",
+  "installable": false,
+  "redistribute": false,
+  "provider": "WayDroid-ATV",
+  "release": "20260717",
+  "android_major": 16,
+  "architecture": "x86_64",
+  "publisher_release": "https://github.com/WayDroid-ATV/waydroid-builds/releases/tag/20260717",
+  "inputs": {
+    "system": {
+      "filename": "lineage-23.2-20260717-GAPPS-waydroid_x86_64-system.zip",
+      "url": "https://github.com/WayDroid-ATV/waydroid-builds/releases/download/20260717/lineage-23.2-20260717-GAPPS-waydroid_x86_64-system.zip",
+      "sha256": "f64a746f2ec50417ebb363ad1da1104d5cc71bb39d89ff21a264b5cacaeb006a",
+      "member": "system.img"
+    },
+    "vendor": {
+      "filename": "lineage-23.2-20260717-MAINLINE-waydroid_x86_64-vendor.zip",
+      "url": "https://github.com/WayDroid-ATV/waydroid-builds/releases/download/20260717/lineage-23.2-20260717-MAINLINE-waydroid_x86_64-vendor.zip",
+      "sha256": "28dfbd0e423dff6d5c7d2e34e15011fbaf4865da769d9923b84656d87e9f4d3c",
+      "member": "vendor.img"
+    }
+  }
+}

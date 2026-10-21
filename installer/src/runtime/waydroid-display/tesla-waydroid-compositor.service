@@ -1,0 +1,23 @@
+[Unit]
+Description=TeslaAndroid private headless Wayland compositor
+Requires=user@1000.service
+After=user@1000.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=hilman
+Group=hilman
+PAMName=tesla-waydroid
+Environment=HOME=/home/hilman
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/usr/bin/weston --backend=headless-backend.so --renderer=pixman --socket=wayland-teslaandroid --width=1280 --height=720 --idle-time=0 --no-config --shell=kiosk-shell.so
+Restart=on-failure
+RestartSec=5s
+KillMode=control-group
+TimeoutStopSec=20s
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

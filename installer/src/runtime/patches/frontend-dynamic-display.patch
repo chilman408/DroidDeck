@@ -1,0 +1,514 @@
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index da8273d..f86ae78 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -7,6 +7,8 @@
+     constructor(apiBaseUrl) {
+       this.apiBaseUrl = String(apiBaseUrl || "").replace(/\/$/, "");
+       this.githubApiBaseUrl = "https://api.github.com";
++      this.displaySession = null;
++      this.displayState = null;
+     }
+ 
+     fetchSystemConfiguration() {
+@@ -32,12 +34,42 @@
+       return response.json();
+     }
+ 
+-    fetchDisplayState() {
+-      return this._fetchJson(this.apiBaseUrl + "/displayState");
++    async openDisplaySession() {
++      const response = await fetch(this.apiBaseUrl + "/displaySession", { method: "POST", cache: "no-store",
++        credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" });
++      if ([404, 501].includes(response.status)) return null;
++      if (!response.ok) throw Object.assign(new Error("Display session unavailable"), { status: response.status });
++      this.setDisplaySession(await response.json());
++      return this.displaySession;
+     }
+ 
+-    postDisplayState(payload) {
+-      return this._postJson(this.apiBaseUrl + "/displayState", payload);
++    setDisplaySession(session) {
++      if (session && (!/^[a-f0-9]{64}$/.test(session.token) || !/^[a-f0-9]{64}$/.test(session.csrfToken))) {
++        throw new Error("Invalid display session");
++      }
++      this.displaySession = session;
++    }
++
++    socketUrl(url) {
++      if (!this.displaySession) return url;
++      const parsed = new URL(url);
++      parsed.searchParams.set("session", this.displaySession.token);
++      return parsed.toString();
++    }
++
++    async fetchDisplayState() {
++      this.displayState = await this._fetchJson(this.apiBaseUrl + "/displayState", {
++        headers: this.displaySession ? { "X-Display-Session": this.displaySession.token } : {} });
++      return this.displayState;
++    }
++
++    async postDisplayState(payload) {
++      if (!this.displaySession) return this._postJson(this.apiBaseUrl + "/displayState", payload);
++      this.displayState = await this._fetchJson(this.apiBaseUrl + "/displayState", { method: "POST",
++        headers: { "Content-Type": "application/json", "X-Display-Session": this.displaySession.token,
++          "X-Display-CSRF": this.displaySession.csrfToken },
++        body: JSON.stringify({ ...payload, generation: payload.generation ?? this.displayState?.generation }) });
++      return this.displayState;
+     }
+ 
+     fetchDeviceInfo() {
+@@ -110,7 +142,7 @@
+         ...(options || {}),
+       });
+       if (!response.ok) {
+-        throw new Error("HTTP " + response.status + " for " + url);
++        throw Object.assign(new Error("HTTP " + response.status + " for " + url), { status: response.status });
+       }
+       return response;
+     }
+diff --git a/js/core/app.js b/js/core/app.js
+index 1b821b8..26c8209 100644
+--- a/js/core/app.js
++++ b/js/core/app.js
+@@ -57,6 +57,7 @@
+     audioController.initialize();
+ 
+     let shellController = null;
++    let touchscreenController = null;
+ 
+     let hasDisplayEnteredNormalOnce = false;
+     let resizeLoadingTimerId = null;
+@@ -84,6 +85,7 @@
+     const rendererManager = new TAHtml.DisplayRendererManager({
+       displayRoot: elements.displayRoot,
+       onSocketOpen: () => {
++        void displayController.refreshControlState();
+         if (shellController) {
+           shellController.requestConnectivityCheck("display_socket_open");
+         }
+@@ -193,12 +195,22 @@
+     });
+     gpsController.initialize();
+ 
+-    const touchscreenController = new TAHtml.TouchscreenController({
++    touchscreenController = new TAHtml.TouchscreenController({
++      apiClient,
++      canControl: () => displayController.remoteDisplayState?.displayControlSupported !== 1 ||
++        (displayController.remoteDisplayState.canControl && !displayController.isPaused &&
++          !displayController.controlRequestInFlight && displayController.remoteDisplayState.transactionStatus === "idle"),
+       touchLayer: elements.touchLayer,
+       socketUrl: flavor.touchscreenWebSocket,
+       getTouchscreenSize: () => displayController.getTouchscreenSize(),
+     });
+     touchscreenController.initialize();
++    displayController.onControlStateChange = (state) => {
++      if (state.canControl && state.transactionStatus === "idle" && !displayController.isPaused) touchscreenController._connectSocket();
++      else touchscreenController._closeSocket();
++      settingsController.refreshDisplayControl(state);
++    };
++    global.addEventListener("pagehide", () => touchscreenController._closeSocket());
+     displayController.setResizeSessionRefreshHandler(() => {
+       touchscreenController.restartSocket();
+     });
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+index 3ba8395..d8dfbbd 100644
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -5,6 +5,20 @@
+   const utils = TAHtml.utils;
+   const constants = TAHtml.constants;
+ 
++  function calculateDynamicSize(area, preset, committed, dynamic) {
++    if (!area || ![area.width, area.height].every(v => Number.isFinite(v) && v >= 96) ||
++        !Number.isInteger(preset) || preset < 0 || preset > 4) return null;
++    const source = dynamic ? area : committed;
++    if (!source || ![source.width, source.height].every(v => Number.isFinite(v) && v > 0)) return null;
++    const scale = Math.min(dynamic ? 1 : Infinity, area.width / source.width, area.height / source.height,
++      1920 / source.width, 1920 / source.height, Math.sqrt(1600000 / (source.width * source.height)),
++      [832, 720, 640, 544, 480][preset] / Math.min(source.width, source.height));
++    let width = Math.min(1920, Math.floor(area.width / 2) * 2, Math.round(source.width * scale / 2) * 2);
++    let height = Math.min(1920, Math.floor(area.height / 2) * 2, Math.round(source.height * scale / 2) * 2);
++    while (width * height > 1600000) { if (width >= height) width -= 2; else height -= 2; }
++    return width >= 96 && height >= 96 ? { width, height } : null;
++  }
++
+   class DisplayController {
+     constructor(options) {
+       this.apiClient = options.apiClient;
+@@ -36,12 +50,15 @@
+       this._dialogWired = false;
+       this._viewportWatcherStarted = false;
+       this.isPaused = false;
++      this.controlRequestInFlight = false;
++      this.onControlStateChange = null;
+ 
+       this._notifyResizeMode(this.resize.mode);
+     }
+ 
+     async initialize() {
+       this._wireDialogEvents();
++      if (this.apiClient.openDisplaySession) await this.apiClient.openDisplaySession();
+ 
+       const remoteDisplayState = this._normalizeRemoteDisplayState(
+         await this.apiClient.fetchDisplayState(),
+@@ -58,12 +75,138 @@
+       });
+ 
+       await this.rendererManager.ensureDisplaySocket({
+-        displayWebSocket: this.flavor.displayWebSocket,
++        displayWebSocket: this._displaySocketUrl(),
+         remoteDisplayState,
+       });
+ 
+       this._setupViewportWatcher();
+       this.triggerResizeFromViewport();
++      if (this.remoteDisplayState.displayControlSupported === 1) {
++        this._startControlPolling();
++        global.addEventListener("pagehide", () => {
++          this.pageSuspended = true;
++          this._clearResizeTimer();
++          global.clearInterval(this.controlPollTimer); this.controlPollTimer = null;
++          this.rendererManager.closeDisplaySocket();
++          if (this.onControlStateChange) this.onControlStateChange({ canControl: false });
++        });
++        global.addEventListener("pageshow", event => {
++          if (!event.persisted) return;
++          this.pageSuspended = false;
++          this._startControlPolling();
++          void this.refreshControlState().then(() => this.triggerResizeFromViewport());
++        });
++      }
++    }
++
++    _startControlPolling() {
++      if (this.controlPollTimer == null) {
++        this.controlPollTimer = global.setInterval(() => { void this.refreshControlState(); }, 1000);
++      }
++    }
++
++    _displaySocketUrl() {
++      return this.apiClient.socketUrl ? this.apiClient.socketUrl(this.flavor.displayWebSocket) : this.flavor.displayWebSocket;
++    }
++
++    _availableArea() {
++      if (document.hidden || this.isPaused || this.pageSuspended) return null;
++      const active = document.activeElement;
++      if (active && (active.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName))) return null;
++      if (global.visualViewport && global.visualViewport.height < global.innerHeight * 0.8) return null;
++      const rect = document.getElementById("home-stage")?.getBoundingClientRect();
++      return rect ? { width: rect.width, height: rect.height } : utils.getViewportSize();
++    }
++
++    _adoptControlledState(state, viewSize = this.display.viewSize) {
++      this.remoteDisplayState = this._normalizeRemoteDisplayState(state);
++      this._setNormalState({ viewSize, adjustedSize: state, remoteDisplayState: this.remoteDisplayState });
++      if (this.onControlStateChange) this.onControlStateChange(this.pageSuspended ?
++        { ...this.remoteDisplayState, canControl: false } : this.remoteDisplayState);
++    }
++
++    async refreshControlState() {
++      if (this.pageSuspended || this.controlPollInFlight || this.controlRequestInFlight || this.remoteDisplayState?.displayControlSupported !== 1) return;
++      this.controlPollInFlight = true;
++      try {
++        const old = this.remoteDisplayState;
++        const next = await this.apiClient.fetchDisplayState();
++        if (this.pageSuspended) return;
++        if (next.transactionStatus !== "idle") {
++          if (this.onControlStateChange) this.onControlStateChange({ ...next, canControl: false });
++          return;
++        }
++        if (next.generation !== old.generation || next.canControl !== old.canControl) {
++          this._adoptControlledState(next); this.triggerResizeFromViewport();
++        } else if (this.onControlStateChange) this.onControlStateChange(next);
++        await this.rendererManager.ensureDisplaySocket({ displayWebSocket: this._displaySocketUrl(), remoteDisplayState: next });
++      } catch (error) {
++        if (this.pageSuspended) return;
++        if ([401, 403].includes(error.status)) {
++          this.rendererManager.closeDisplaySocket();
++          if (this.onControlStateChange) this.onControlStateChange({ canControl: false });
++          this.apiClient.setDisplaySession?.(null);
++          try {
++            await this.apiClient.openDisplaySession();
++            const renewed = await this.apiClient.fetchDisplayState();
++            if (this.pageSuspended) return;
++            this._adoptControlledState(renewed);
++            await this.rendererManager.ensureDisplaySocket({ displayWebSocket: this._displaySocketUrl(), remoteDisplayState: renewed });
++          } catch (_error) { /* Keep control disabled until authentication succeeds. */ }
++        }
++      } finally { this.controlPollInFlight = false; }
++    }
++
++    _scheduleControlledResize(viewSize) {
++      this._clearResizeTimer();
++      this.resize.pendingViewSize = viewSize;
++      if (this.controlRequestInFlight) return;
++      this.resize.timerId = global.setTimeout(() => { this.resize.timerId = null; void this._sendControlledResize(); }, 1000);
++    }
++
++    async _sendControlledResize() {
++      if (!this._availableArea() || this.controlRequestInFlight) return;
++      this.controlRequestInFlight = true;
++      const viewSize = this.resize.pendingViewSize;
++      this.resize.pendingViewSize = null;
++      try {
++        const state = await this.apiClient.fetchDisplayState();
++        if (!this._availableArea() || (this.resize.pendingViewSize && !utils.sameSize(this.resize.pendingViewSize, viewSize))) return;
++        if (!state.canControl || state.transactionStatus !== "idle") return;
++        const size = calculateDynamicSize(viewSize, state.resolutionPreset, state, state.isResponsive === 1);
++        if (!size) return;
++        if (utils.sameSize(size, state)) { this._adoptControlledState(state, viewSize); return; }
++        this._setResizeMode("resize_in_progress");
++        if (this.onControlStateChange) this.onControlStateChange({ ...state, canControl: false });
++        const committed = await this.apiClient.postDisplayState({ ...size, density: state.density,
++          resolutionPreset: state.resolutionPreset, isResponsive: state.isResponsive, generation: state.generation });
++        this._adoptControlledState(committed, viewSize);
++      } catch (error) {
++        TAHtml.log("Controlled resize failed: " + String(error));
++        try { this._adoptControlledState(await this.apiClient.fetchDisplayState()); } catch (_error) {}
++        if (error.status === 409) this.resize.pendingViewSize = this._availableArea();
++      } finally {
++        this.controlRequestInFlight = false; this._setResizeMode("normal");
++        if (this.resize.pendingViewSize && !this.isPaused) this._scheduleControlledResize(this.resize.pendingViewSize);
++      }
++    }
++
++    async updateControlledSettings(mutator) {
++      if (this.controlRequestInFlight) throw new Error("Display resize in progress");
++      this._clearResizeTimer(); this.controlRequestInFlight = true;
++      try {
++        const state = await this.apiClient.fetchDisplayState();
++        if (!state.canControl || state.transactionStatus !== "idle") throw new Error("Display is view-only or busy");
++        const draft = { ...state }; mutator(draft);
++        const size = calculateDynamicSize(this.display.viewSize, draft.resolutionPreset, state, false);
++        if (!size) throw new Error("Display area is too small");
++        if (this.onControlStateChange) this.onControlStateChange({ ...state, canControl: false });
++        this._adoptControlledState(await this.apiClient.postDisplayState({ ...size, density: state.density,
++          resolutionPreset: draft.resolutionPreset, isResponsive: draft.isResponsive, generation: state.generation }));
++      } catch (error) {
++        try { this._adoptControlledState(await this.apiClient.fetchDisplayState()); } catch (_error) {}
++        throw error;
++      } finally { this.controlRequestInFlight = false; }
+     }
+ 
+     getTouchscreenSize() {
+@@ -83,13 +226,17 @@
+     }
+ 
+     triggerResizeFromViewport() {
+-      this.triggerResize(utils.getViewportSize());
++      this.triggerResize(this.remoteDisplayState?.displayControlSupported === 1 ? this._availableArea() : utils.getViewportSize());
+     }
+ 
+     triggerResize(viewSize) {
+       if (this.isPaused) {
+         return;
+       }
++      if (this.remoteDisplayState?.displayControlSupported === 1) {
++        if (viewSize && this._availableArea()) this._scheduleControlledResize(viewSize);
++        return;
++      }
+       const normalizedViewSize = utils.normalizeSize(viewSize, {
+         fallback: { width: 1, height: 1 },
+       });
+@@ -302,9 +449,9 @@
+         this.display.adjustedSize.height,
+       );
+ 
+-      if (!this.isPaused) {
++      if (!this.isPaused && !this.pageSuspended) {
+         void this.rendererManager.ensureDisplaySocket({
+-          displayWebSocket: this.flavor.displayWebSocket,
++          displayWebSocket: this._displaySocketUrl(),
+           remoteDisplayState,
+         });
+       }
+@@ -321,11 +468,11 @@
+       if (nextPaused) {
+         this._hideDisplayTypeSelectionDialog();
+         this._clearResizeTimer();
+-        this.rendererManager.closeDisplaySocket();
++        if (this.remoteDisplayState?.displayControlSupported !== 1) this.rendererManager.closeDisplaySocket();
+       } else {
+         if (this.remoteDisplayState) {
+           void this.rendererManager.ensureDisplaySocket({
+-            displayWebSocket: this.flavor.displayWebSocket,
++            displayWebSocket: this._displaySocketUrl(),
+             remoteDisplayState: this.remoteDisplayState,
+           });
+         }
+@@ -346,7 +493,8 @@
+           return;
+         }
+ 
+-        const current = utils.getViewportSize();
++        const current = this.remoteDisplayState?.displayControlSupported === 1 ? this._availableArea() : utils.getViewportSize();
++        if (!current) return;
+         if (!utils.sameSize(current, lastViewport)) {
+           lastViewport = current;
+ 
+@@ -368,6 +516,10 @@
+ 
+       global.addEventListener("resize", onPotentialResize, { passive: true });
+       global.addEventListener("orientationchange", onPotentialResize, { passive: true });
++      if (this.remoteDisplayState?.displayControlSupported === 1) {
++        document.addEventListener?.("visibilitychange", () => this.triggerResizeFromViewport());
++        document.addEventListener?.("focusout", () => this.triggerResizeFromViewport());
++      }
+ 
+       if (global.visualViewport) {
+         global.visualViewport.addEventListener("resize", onPotentialResize, {
+@@ -456,6 +608,7 @@
+ 
+     _normalizeRemoteDisplayState(raw) {
+       return {
++        ...raw,
+         width: Math.max(1, utils.toInt(raw.width, 1024)),
+         height: Math.max(1, utils.toInt(raw.height, 768)),
+         density: utils.toInt(raw.density, 200),
+@@ -614,4 +767,5 @@
+   }
+ 
+   TAHtml.DisplayController = DisplayController;
++  TAHtml.calculateDynamicSize = calculateDynamicSize;
+ })(window);
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 8d85ae3..0f0d7a9 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -192,6 +192,27 @@
+ 
+       this.content.innerHTML = "";
+ 
++      if (config.displayControlSupported === 1) {
++        this._displayControlGeneration = config.generation;
++        const resolution = this._createSelect(constants.DISPLAY_RESOLUTION_PRESETS, config.resolutionPreset,
++          async value => { await this._updateDisplayConfig(draft => { draft.resolutionPreset = utils.toInt(value, config.resolutionPreset); }); });
++        const responsive = this._createSwitch(config.isResponsive === 1,
++          async checked => { await this._updateDisplayConfig(draft => { draft.isResponsive = checked ? 1 : 0; }); });
++        this._appendTile({ icon: "display_settings", title: "Resolution", trailing: resolution });
++        this._appendDivider();
++        this._appendTile({ icon: "photo_size_select_large", title: "Dynamic aspect ratio", trailing: responsive });
++        const enabled = config.canControl && config.transactionStatus === "idle";
++        for (const input of this.content.querySelectorAll("button, input")) input.disabled = !enabled;
++        this._appendDivider();
++        this._appendTile({ icon: "texture", title: "Renderer", trailing: this._createTrailingText("PNG") });
++        this._appendTile({ icon: "monitor", title: "Refresh rate", trailing: this._createTrailingText("Automatic") });
++        if (this.displaySettingsError) {
++          const status = utils.createElement("div", "settings-error", this.displaySettingsError);
++          status.setAttribute("role", "status"); this.content.appendChild(status);
++        }
++        return;
++      }
++
+       this._appendTile({
+         icon: "texture",
+         title: "Renderer",
+@@ -286,6 +307,11 @@
+ 
+       this.content.innerHTML = "";
+ 
++      if (config.displayControlSupported === 1) {
++        this._appendTile({ icon: "monitor", title: "Rear Display Support", trailing: this._createTrailingText("Unavailable") });
++        return;
++      }
++
+       this._appendTile({
+         icon: "monitor",
+         title: "Rear Display Support",
+@@ -726,7 +752,28 @@
+       }
+     }
+ 
++    refreshDisplayControl(state) {
++      if (this.activeSectionId !== "display" || state.displayControlSupported !== 1) return;
++      const enabled = state.canControl && state.transactionStatus === "idle" &&
++        !this.displayController.controlRequestInFlight;
++      for (const input of this.content.querySelectorAll("button, input")) input.disabled = !enabled;
++      if (enabled && this._displayControlGeneration !== state.generation) {
++        this._displayControlGeneration = state.generation;
++        void this._renderActiveSection();
++      }
++    }
++
+     async _updateDisplayConfig(mutator, showRebootBanner) {
++      if (this.displayController.remoteDisplayState?.displayControlSupported === 1) {
++        for (const input of this.content.querySelectorAll("button, input")) input.disabled = true;
++        this.displaySettingsError = null;
++        try { await this.displayController.updateControlledSettings(mutator); await this._renderActiveSection(); }
++        catch (_error) {
++          this.displaySettingsError = "Display change failed";
++          await this._renderActiveSection();
++        }
++        return;
++      }
+       const shouldShowRebootBanner = showRebootBanner !== false;
+ 
+       try {
+@@ -747,6 +794,7 @@
+ 
+     _normalizeDisplayState(raw) {
+       return {
++        ...raw,
+         width: Math.max(1, utils.toInt(raw.width, 1024)),
+         height: Math.max(1, utils.toInt(raw.height, 768)),
+         density: utils.toInt(raw.density, 200),
+diff --git a/js/touchscreen/touchscreen-controller.js b/js/touchscreen/touchscreen-controller.js
+index 705a6b8..f6ba2a2 100644
+--- a/js/touchscreen/touchscreen-controller.js
++++ b/js/touchscreen/touchscreen-controller.js
+@@ -9,6 +9,8 @@
+       this.touchLayer = options.touchLayer;
+       this.socketUrl = options.socketUrl;
+       this.getTouchscreenSize = options.getTouchscreenSize;
++      this.apiClient = options.apiClient;
++      this.canControl = options.canControl || (() => true);
+ 
+       this.touchScreenSocket = null;
+       this.slots = this._createSlots();
+@@ -40,8 +42,8 @@
+     }
+ 
+     resetTouchscreen() {
+-      this._resetLocalSlots();
+       this._resetTouchscreen();
++      this._resetLocalSlots();
+     }
+ 
+     sendTouchScreenCommand(command) {
+@@ -53,15 +55,15 @@
+     }
+ 
+     _connectSocket() {
+-      if (this.touchScreenSocket) {
++      if (this.touchScreenSocket || !this.canControl()) {
+         return;
+       }
+ 
+-      const socket = new ReconnectingWebSocket(this.socketUrl);
++      const socket = new ReconnectingWebSocket(this.apiClient ? this.apiClient.socketUrl(this.socketUrl) : this.socketUrl);
+ 
+       socket.onopen = () => {
+         this._resetLocalSlots();
+-        this._resetTouchscreen();
++        if (!this.apiClient?.displaySession) this._resetTouchscreen();
+       };
+       socket.onclose = () => {
+         this._resetLocalSlots();
+@@ -258,6 +260,7 @@
+     }
+ 
+     _resetTouchscreen() {
++      if (this.apiClient?.displaySession && !this.slots.some(slot => slot.trackingId !== -1)) return;
+       const commands = this.slots.map((slot) => {
+         slot.trackingId = -1;
+         return {
+@@ -286,7 +289,7 @@
+     }
+ 
+     _isSocketOpen() {
+-      return Boolean(this.touchScreenSocket && this.touchScreenSocket.readyState === 1);
++      return Boolean(this.canControl() && this.touchScreenSocket && this.touchScreenSocket.readyState === 1);
+     }
+ 
+     _sendRaw(payload) {

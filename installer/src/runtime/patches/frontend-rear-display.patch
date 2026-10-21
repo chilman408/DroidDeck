@@ -1,0 +1,343 @@
+diff --git a/css/app.css b/css/app.css
+index cd5f124..7b936db 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -763,6 +763,17 @@
+       display: inline-block;
+     }
+ 
++    .rear-role-picker { display: flex; gap: 4px; min-width: 0; }
++    .rear-role-picker label { position: relative; min-width: 0; }
++    .rear-role-picker input { position: absolute; opacity: 0; width: 1px; height: 1px; }
++    .rear-role-picker span {
++      display: block; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.25);
++      border-radius: 6px; color: var(--text-primary); font-size: 20px; cursor: pointer;
++    }
++    .rear-role-picker input:checked + span { background: #a84a4a; border-color: #a84a4a; }
++    .rear-role-picker input:disabled + span { opacity: 0.45; cursor: default; }
++    .rear-role-picker label:focus-within span { outline: 2px solid var(--text-primary); outline-offset: 2px; }
++
+     .settings-switch input {
+       opacity: 0;
+       width: 0;
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index f9530cb..3966380 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -95,6 +95,22 @@
+           "X-Display-CSRF": this.displaySession.csrfToken }, body: JSON.stringify(payload) });
+     }
+ 
++    async postRearDisplaySettings(payload) {
++      return this._postDisplayAuthority("rearDisplayState", payload);
++    }
++
++    async postDisplayRole(role) {
++      return this._postDisplayAuthority("displayRole", { role });
++    }
++
++    async _postDisplayAuthority(route, payload) {
++      if (!this.displaySession) throw new Error("Display session required");
++      this.displayState = await this._fetchJson(this.apiBaseUrl + "/" + route, { method: "POST",
++        headers: { "Content-Type": "application/json", "X-Display-Session": this.displaySession.token,
++          "X-Display-CSRF": this.displaySession.csrfToken }, body: JSON.stringify(payload) });
++      return this.displayState;
++    }
++
+     fetchDeviceInfo() {
+       return this._fetchJson(this.apiBaseUrl + "/deviceInfo");
+     }
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+index a6b3fa4..e565223 100644
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -69,9 +69,10 @@
+       this._wireDialogEvents();
+       if (this.apiClient.openDisplaySession) await this.apiClient.openDisplaySession();
+ 
+-      const remoteDisplayState = this._normalizeRemoteDisplayState(
++      let remoteDisplayState = this._normalizeRemoteDisplayState(
+         await this.apiClient.fetchDisplayState(),
+       );
++      remoteDisplayState = await this._registerStoredRole(remoteDisplayState);
+       this.remoteDisplayState = remoteDisplayState;
+ 
+       this._setNormalState({
+@@ -137,28 +138,37 @@
+     async refreshControlState() {
+       if (this.pageSuspended || this.controlPollInFlight || this.controlRequestInFlight || this.remoteDisplayState?.displayControlSupported !== 1) return;
+       this.controlPollInFlight = true;
++      const serial = this.controlOperationSerial || 0;
+       try {
+         const old = this.remoteDisplayState;
+-        const next = await this.apiClient.fetchDisplayState();
+-        if (this.pageSuspended) return;
++        let next = await this.apiClient.fetchDisplayState();
++        if (this.pageSuspended || this.controlRequestInFlight || serial !== (this.controlOperationSerial || 0)) return;
+         if (next.transactionStatus !== "idle") {
+           if (this.onControlStateChange) this.onControlStateChange({ ...next, canControl: false });
+           return;
+         }
+-        if (next.generation !== old.generation || next.canControl !== old.canControl) {
++        next = await this._registerStoredRole(next);
++        if (this.pageSuspended || this.controlRequestInFlight || serial !== (this.controlOperationSerial || 0)) return;
++        if (next.generation !== old.generation || next.canControl !== old.canControl || next.canResize !== old.canResize ||
++            next.displayRole !== old.displayRole || next.rearDisplayRevision !== old.rearDisplayRevision) {
+           this._adoptControlledState(next); this.triggerResizeFromViewport();
+-        } else if (this.onControlStateChange) this.onControlStateChange(next);
++        } else {
++          this.remoteDisplayState = this._normalizeRemoteDisplayState(next);
++          if (this.onControlStateChange) this.onControlStateChange(next);
++        }
+         await this.rendererManager.ensureDisplaySocket({ displayWebSocket: this._displaySocketUrl(), remoteDisplayState: next });
+       } catch (error) {
+-        if (this.pageSuspended) return;
++        if (this.pageSuspended || this.controlRequestInFlight || serial !== (this.controlOperationSerial || 0)) return;
+         if ([401, 403].includes(error.status)) {
+           this.rendererManager.closeDisplaySocket();
+           if (this.onControlStateChange) this.onControlStateChange({ canControl: false });
+           this.apiClient.setDisplaySession?.(null);
+           try {
+             await this.apiClient.openDisplaySession();
+-            const renewed = await this.apiClient.fetchDisplayState();
++            let renewed = await this.apiClient.fetchDisplayState();
+             if (this.pageSuspended) return;
++            renewed = await this._registerStoredRole(renewed);
++            if (this.pageSuspended || this.controlRequestInFlight || serial !== (this.controlOperationSerial || 0)) return;
+             this._adoptControlledState(renewed);
+             await this.rendererManager.ensureDisplaySocket({ displayWebSocket: this._displaySocketUrl(), remoteDisplayState: renewed });
+           } catch (_error) { /* Keep control disabled until authentication succeeds. */ }
+@@ -181,7 +191,7 @@
+       try {
+         const state = await this.apiClient.fetchDisplayState();
+         if (!this._availableArea() || (this.resize.pendingViewSize && !utils.sameSize(this.resize.pendingViewSize, viewSize))) return;
+-        if (!state.canControl || state.transactionStatus !== "idle") return;
++        if (!state.canControl || state.canResize === false || state.transactionStatus !== "idle") return;
+         const size = calculateDynamicSize(viewSize, state.resolutionPreset, state, state.isResponsive === 1);
+         if (!size) return;
+         if (utils.sameSize(size, state)) { this._adoptControlledState(state, viewSize); return; }
+@@ -205,7 +215,7 @@
+       this._clearResizeTimer(); this.controlRequestInFlight = true;
+       try {
+         const state = await this.apiClient.fetchDisplayState();
+-        if (!state.canControl || state.transactionStatus !== "idle") throw new Error("Display is view-only or busy");
++        if (!state.canControl || state.canResize === false || state.transactionStatus !== "idle") throw new Error("Display is view-only or busy");
+         const draft = { ...state }; mutator(draft);
+         const size = calculateDynamicSize(this.display.viewSize, draft.resolutionPreset, state, false);
+         if (!size) throw new Error("Display area is too small");
+@@ -225,6 +235,61 @@
+       };
+     }
+ 
++    async _registerStoredRole(state) {
++      if (state.rearDisplayControlSupported !== 1) return state;
++      // Read browser preference once; another tab cannot silently change this role.
++      if (this.controlledPrimaryPreference === undefined) {
++        try { this.controlledPrimaryPreference = this._readPrimaryDisplayPreference(); }
++        catch (_error) { this.controlledPrimaryPreference = null; }
++      }
++      if (this.controlledPrimaryPreference === null) {
++        if (state.isRearDisplayEnabled === 1 && !this.isPaused) this._showDisplayTypeSelectionDialog();
++        return state;
++      }
++      const role = this.controlledPrimaryPreference ? "primary" : "rear";
++      if (state.displayRole === role) return state;
++      if (this.onControlStateChange) this.onControlStateChange({ ...state, canControl: false });
++      const registration = this.apiClient.postDisplayRole(role);
++      this.roleRegistration = registration;
++      try { return await registration; }
++      finally { if (this.roleRegistration === registration) this.roleRegistration = null; }
++    }
++
++    async selectPrimaryDisplay(primary) {
++      if (typeof primary !== "boolean" || this.controlRequestInFlight || this.pageSuspended) throw new Error("Display role is busy");
++      this._clearResizeTimer(); this.controlRequestInFlight = true;
++      this.controlOperationSerial = (this.controlOperationSerial || 0) + 1;
++      try {
++        if (this.roleRegistration) await this.roleRegistration;
++        const state = await this.apiClient.fetchDisplayState();
++        if (state.rearDisplayControlSupported !== 1 || state.transactionStatus !== "idle") throw new Error("Display role unavailable");
++        if (this.onControlStateChange) this.onControlStateChange({ ...state, canControl: false });
++        const next = await this.apiClient.postDisplayRole(primary ? "primary" : "rear");
++        this.controlledPrimaryPreference = primary;
++        try { this._storePrimaryDisplayPreference(primary); } catch (_error) { /* This tab still retains its accepted role. */ }
++        this._adoptControlledState(next); this._hideDisplayTypeSelectionDialog();
++      } finally {
++        this.controlRequestInFlight = false;
++        await this.refreshControlState(); this.triggerResizeFromViewport();
++      }
++    }
++
++    async updateRearSettings(payload) {
++      if (this.controlRequestInFlight || this.pageSuspended) throw new Error("Rear display is busy");
++      this._clearResizeTimer(); this.controlRequestInFlight = true;
++      this.controlOperationSerial = (this.controlOperationSerial || 0) + 1;
++      try {
++        if (this.roleRegistration) await this.roleRegistration;
++        const state = await this.apiClient.fetchDisplayState();
++        if (state.rearDisplayControlSupported !== 1 || !state.canControl || state.transactionStatus !== "idle") throw new Error("Rear settings are view-only or busy");
++        if (this.onControlStateChange) this.onControlStateChange({ ...state, canControl: false });
++        this._adoptControlledState(await this.apiClient.postRearDisplaySettings(payload));
++      } finally {
++        this.controlRequestInFlight = false;
++        await this.refreshControlState(); this.triggerResizeFromViewport();
++      }
++    }
++
+     setResizeSessionRefreshHandler(handler) {
+       this.onResizeSessionRefresh = typeof handler === "function" ? handler : null;
+     }
+@@ -568,6 +633,11 @@
+     }
+ 
+     _onDisplayTypeSelectionFinished(isPrimaryDisplay) {
++      if (this.remoteDisplayState?.rearDisplayControlSupported === 1) {
++        if (this.controlRequestInFlight) return;
++        void this.selectPrimaryDisplay(isPrimaryDisplay).catch(error => TAHtml.log("Display role selection failed: " + String(error)));
++        return;
++      }
+       this._storePrimaryDisplayPreference(isPrimaryDisplay);
+       this._hideDisplayTypeSelectionDialog();
+ 
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index c95c83f..e9929e6 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -202,12 +202,15 @@
+           async value => { await this._updateDisplayConfig(draft => { draft.resolutionPreset = utils.toInt(value, config.resolutionPreset); }); });
+         const responsive = this._createSwitch(config.isResponsive === 1,
+           async checked => { await this._updateDisplayConfig(draft => { draft.isResponsive = checked ? 1 : 0; }); });
++        resolution.dataset.displaySize = "1";
++        responsive.dataset.displaySize = "1";
+         this._appendTile({ icon: "display_settings", title: "Resolution", trailing: resolution });
+         this._appendDivider();
+         this._appendTile({ icon: "photo_size_select_large", title: "Dynamic aspect ratio", trailing: responsive });
+         const enabled = config.canControl && config.transactionStatus === "idle";
+         for (const input of this.content.querySelectorAll("button, input")) {
+-          if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled;
++          if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled ||
++            (config.canResize === false && Boolean(input.closest?.("[data-display-size]")));
+         }
+         this._appendDivider();
+         if (config.streamFormats?.includes("h264")) {
+@@ -243,7 +246,8 @@
+           this._appendDivider();
+           this._appendTile({ icon: "monitor", title: "Target frame rate", trailing: rate });
+           for (const input of this.content.querySelectorAll("button, input")) {
+-            if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled || this.videoSettingsPending;
++            if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled || this.videoSettingsPending ||
++              (config.canResize === false && Boolean(input.closest?.("[data-display-size]")));
+           }
+         } else {
+           this._appendTile({ icon: "monitor", title: "Refresh rate", trailing: this._createTrailingText("30 Hz") });
+@@ -332,6 +336,55 @@
+       );
+     }
+ 
++    _rearSharedAllowed(state) {
++      return Boolean(!this.rearSettingsPending && state?.canControl && state.transactionStatus === "idle" &&
++        !this.displayController.controlRequestInFlight);
++    }
++
++    _renderControlledRearDisplay(config) {
++      const rolePicker = utils.createElement("div", "rear-role-picker", null);
++      rolePicker.setAttribute("data-rear-role", "");
++      for (const [role, label] of [["primary", "Main"], ["rear", "Rear"]]) {
++        const choice = document.createElement("label"), input = document.createElement("input");
++        input.type = "radio"; input.name = "rear-display-role"; input.value = role;
++        input.checked = config.displayRole === role;
++        input.addEventListener("change", () => {
++          if (input.checked) void this._changeControlledRear(config, { role });
++        });
++        choice.appendChild(input); choice.appendChild(utils.createElement("span", null, label)); rolePicker.appendChild(choice);
++      }
++      this._appendTile({ icon: "screenshot_monitor", title: "This Display", trailing: rolePicker });
++      const addSharedSwitch = (title, checked, patch) => {
++        const switchControl = this._createSwitch(checked, value => this._changeControlledRear(config, patch(value)),
++          () => this._rearSharedAllowed(this.displayController.remoteDisplayState));
++        switchControl.setAttribute("data-rear-shared", "");
++        this._appendTile({ icon: "monitor", title, trailing: switchControl });
++      };
++      addSharedSwitch("Rear Display Support", config.isRearDisplayEnabled === 1, enabled => ({ enabled }));
++      if (config.isRearDisplayEnabled === 1) {
++        addSharedSwitch("Rear Display Priority", config.isRearDisplayPrioritised === 1, prioritised => ({ prioritised }));
++      }
++      if (this.rearSettingsError) this._appendDescription(this.rearSettingsError);
++      this._rearControlGeneration = config.generation;
++      this.refreshDisplayControl(config);
++    }
++
++    async _changeControlledRear(config, change) {
++      if (this.rearSettingsPending) return;
++      if (!("role" in change) && !this._rearSharedAllowed(this.displayController.remoteDisplayState)) return;
++      this.rearSettingsPending = true; this.rearSettingsError = null;
++      this.refreshDisplayControl(this.displayController.remoteDisplayState);
++      try {
++        if ("role" in change) await this.displayController.selectPrimaryDisplay(change.role === "primary");
++        else await this.displayController.updateRearSettings({ revision: config.rearDisplayRevision,
++          enabled: config.isRearDisplayEnabled === 1, prioritised: config.isRearDisplayPrioritised === 1, ...change });
++      } catch (_error) { this.rearSettingsError = "Rear display change failed. Reload settings and retry."; }
++      finally {
++        this.rearSettingsPending = false;
++        if (this.activeSectionId === "rearDisplay") await this._renderActiveSection();
++      }
++    }
++
+     async _renderRearDisplaySection(token) {
+       this._appendLoadingState();
+ 
+@@ -349,6 +402,10 @@
+ 
+       this.content.innerHTML = "";
+ 
++      if (config.rearDisplayControlSupported === 1) {
++        this._renderControlledRearDisplay(config);
++        return;
++      }
+       if (config.displayControlSupported === 1) {
+         this._appendTile({ icon: "monitor", title: "Rear Display Support", trailing: this._createTrailingText("Unavailable") });
+         return;
+@@ -858,6 +915,15 @@
+     }
+ 
+     refreshDisplayControl(state) {
++      if (this.activeSectionId === "rearDisplay" && state.rearDisplayControlSupported === 1) {
++        const busy = this.rearSettingsPending || this.displayController.controlRequestInFlight || state.transactionStatus !== "idle";
++        for (const input of this.content.querySelectorAll("[data-rear-role] input")) input.disabled = Boolean(busy);
++        for (const input of this.content.querySelectorAll("[data-rear-shared] input")) input.disabled = !this._rearSharedAllowed(state);
++        if (!busy && this._rearControlGeneration !== state.generation) {
++          this._rearControlGeneration = state.generation; void this._renderActiveSection();
++        }
++        return;
++      }
+       if (this.activeSectionId === "audio" && this.apiClient.browserAudioSupported) {
+         const allowed = this._audioSettingsAllowed(state);
+         for (const input of this.content.querySelectorAll("input, button")) input.disabled = !allowed;
+@@ -873,7 +939,8 @@
+       const enabled = !this.videoSettingsPending && state.canControl && state.transactionStatus === "idle" &&
+         !this.displayController.controlRequestInFlight;
+       for (const input of this.content.querySelectorAll("button, input")) {
+-        if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled;
++        if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled ||
++          (state.canResize === false && Boolean(input.closest?.("[data-display-size]")));
+       }
+       if (enabled && (this._displayControlGeneration !== state.generation ||
+           (state.videoTargets && this._videoControlRevision !== state.videoTargets.revision))) {
+@@ -1160,7 +1227,7 @@
+       return root;
+     }
+ 
+-    _createSwitch(value, onChange) {
++    _createSwitch(value, onChange, canEnable) {
+       const label = utils.createElement("label", "settings-switch", null);
+       const input = document.createElement("input");
+       input.type = "checkbox";
+@@ -1172,7 +1239,7 @@
+         try {
+           await onChange(Boolean(input.checked));
+         } finally {
+-          input.disabled = false;
++          input.disabled = canEnable ? !canEnable() : false;
+         }
+       });
+ 

@@ -1,0 +1,2 @@
+# Read-only AXML parsing / separate compatibility resource generation only.
+androguard==4.1.3

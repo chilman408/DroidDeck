@@ -1,0 +1,230 @@
+diff --git a/js/audio/audioplayback.js b/js/audio/audioplayback.js
+index db09043..f5f85ae 100644
+--- a/js/audio/audioplayback.js
++++ b/js/audio/audioplayback.js
+@@ -9,6 +9,16 @@
+   const KEEP_TAIL_SEC       = 0.20;
+   const MAX_LATENCY_SEC     = 1.0;
+   const HARD_JUMP_SEC       = 0.10;
++  const AUDIO_DELAY_KEY     = 'TAHtml_audioDelayMs';
++  let audioDelayMs = 0;
++  let delayedStartPending = false;
++  let delayedStartPaused = false;
++  let delayedStartTimer = null;
++  const validDelay = value => Number.isInteger(value) && value >= 0 && value <= 750 && value % 25 === 0;
++  try {
++    const saved = Number(window.localStorage?.getItem(AUDIO_DELAY_KEY));
++    if (validDelay(saved)) audioDelayMs = saved;
++  } catch (_) {}
+ 
+   let isAudioEnabled = true;
+   let audioVolume = 1.0;
+@@ -42,12 +52,22 @@
+     if (audioEl) audioEl.volume = audioVolume;
+   };
+   window.getAudioEnabled = function() { return isAudioEnabled; };
++  window.getAudioDelayMs = function() { return audioDelayMs; };
++  window.setAudioDelayMs = function(value) {
++    if (!validDelay(value)) throw new RangeError('Invalid audio delay');
++    if (value === audioDelayMs) return value;
++    audioDelayMs = value;
++    try { window.localStorage?.setItem(AUDIO_DELAY_KEY, String(value)); } catch (_) {}
++    if (started) { window.stopAudioPlayback(); window.startAudioPlayback(); }
++    return value;
++  };
+ 
+   window.primeAudioFromGesture = function primeAudioFromGesture() {
+     try {
+       ensureAudioEl();
+       resumeAudioContextIfNeeded();
+-      audioEl.play().catch(()=>{});
++      if (delayedStartPending) { delayedStartPaused = false; maybeStartDelayedAudio(); }
++      else audioEl.play().catch(()=>{});
+     } catch(_) {}
+   };
+ 
+@@ -80,6 +100,7 @@
+     audioEl.addEventListener('error', () => {
+       recoverPipelineSoon();
+     });
++    audioEl.addEventListener('canplay', maybeStartDelayedAudio);
+ 
+     return audioEl;
+   }
+@@ -101,22 +122,28 @@
+ 
+   function setupMSE() {
+     mediaSource = new MediaSource();
++    const activeSource = mediaSource;
+     const el = ensureAudioEl();
+     mediaUrl = URL.createObjectURL(mediaSource);
+     el.src = mediaUrl;
+     el.load();
+ 
+     mediaSource.addEventListener('sourceopen', () => {
++      if (mediaSource !== activeSource) return;
+       try { mediaSource.duration = Infinity; } catch(_){}
+       try {
+         sourceBuffer = mediaSource.addSourceBuffer(MIME);
+         sourceBuffer.mode = 'sequence';
++        const activeBuffer = sourceBuffer;
+ 
+         sourceBuffer.addEventListener('updateend', () => {
++          if (mediaSource !== activeSource || sourceBuffer !== activeBuffer) return;
+           processQueue();
++          maybeStartDelayedAudio();
+           maybeReduceLatency();
+         });
+         sourceBuffer.addEventListener('error', (e) => {
++          if (mediaSource !== activeSource || sourceBuffer !== activeBuffer) return;
+           log('SourceBuffer error', e);
+           recoverPipelineSoon();
+         });
+@@ -174,7 +201,9 @@
+   function startWorker(url) {
+     if (worker) { try { worker.terminate(); } catch {} worker = null; }
+     worker = new Worker("./js/audio/audio-ws-worker.js");
++    const activeWorker = worker;
+     worker.onmessage = (e) => {
++      if (worker !== activeWorker) return;
+       const { type } = e.data || {};
+       if (type === 'data') {
+         const ab = e.data.buf;
+@@ -261,43 +290,69 @@
+   }
+ 
+   function maybeReduceLatency() {
+-    if (!sourceBuffer || sourceBuffer.updating || !audioEl) return;
++    if (!sourceBuffer || sourceBuffer.updating || !audioEl || delayedStartPending) return;
+     const remain = getBufferedRemain();
+-    if (remain > MAX_LATENCY_SEC) {
++    const extraDelay = audioDelayMs / 1000;
++    if (remain > MAX_LATENCY_SEC + extraDelay) {
+       const b = sourceBuffer.buffered;
+       if (!b || b.length === 0) return;
+       const end = b.end(b.length - 1);
+-      const target = Math.max(0, end - HARD_JUMP_SEC);
++      const target = Math.max(b.start(b.length - 1), end - HARD_JUMP_SEC - extraDelay);
+       try { audioEl.currentTime = target; } catch {}
+     }
+   }
+ 
++  function maybeStartDelayedAudio() {
++    if (!delayedStartPending || delayedStartPaused || delayedStartTimer !== null || !isAudioEnabled ||
++        !sourceBuffer || sourceBuffer.updating || !sourceBuffer.buffered?.length || !(audioEl?.readyState >= 3)) return;
++    const activeSource = mediaSource;
++    // Delay from media readiness, not network connect time or a guessed VM offset.
++    delayedStartTimer = setTimeout(() => {
++      delayedStartTimer = null;
++      if (!delayedStartPending || delayedStartPaused || !isAudioEnabled || mediaSource !== activeSource) return;
++      delayedStartPending = false;
++      maybeReduceLatency();
++      audioEl.play().then(() => {
++        if (started && mediaSource === activeSource && !audioEl.paused && 'mediaSession' in navigator) {
++          navigator.mediaSession.playbackState = 'playing';
++        }
++      }).catch(()=>{});
++    }, audioDelayMs);
++  }
++
+   function recoverPipelineSoon() {
+     if (recovering) return;
+     recovering = true;
+     recoveryTimer = setTimeout(() => {
+       recoveryTimer = null;
+       if (!started || !isAudioEnabled) { recovering = false; return; }
++      const preservePause = delayedStartPaused;
+       stopAudio();
+-      startAudio();
++      startAudio(preservePause);
+       recovering = false;
+     }, 800);
+   }
+ 
+-  function startAudio() {
++  function startAudio(preservePause = false) {
+     if (!isAudioEnabled || !window.audioWebsocketUrl || !window.MediaSource || !MediaSource.isTypeSupported(MIME)) return false;
+ 
++    delayedStartPending = audioDelayMs > 0;
++    delayedStartPaused = delayedStartPending && preservePause;
++    const el = ensureAudioEl();
++    el.autoplay = !delayedStartPending;
++    if (delayedStartPending) el.pause();
+     resumeAudioContextIfNeeded();
+     setupMSE();
+     startWorker(window.audioWebsocketUrl);
+ 
+     setupMediaSession();
+ 
+-    ensureAudioEl().play().catch(()=>{});
++    if (!delayedStartPending) ensureAudioEl().play().catch(()=>{});
+     return true;
+   }
+ 
+   function stopAudio() {
++    clearTimeout(delayedStartTimer); delayedStartTimer = null; delayedStartPending = false; delayedStartPaused = false;
+     if (trimmingTimer) { clearInterval(trimmingTimer); trimmingTimer = null; }
+     stopWorker();
+     destroyMSE();
+@@ -319,9 +374,17 @@
+         artist: 'Live',
+         album: 'TeslaAndroid'
+       });
+-      navigator.mediaSession.setActionHandler('play',  () => { audioEl?.play();  navigator.mediaSession.playbackState = 'playing'; });
+-      navigator.mediaSession.setActionHandler('pause', () => { audioEl?.pause(); navigator.mediaSession.playbackState = 'paused';  });
+-      navigator.mediaSession.playbackState = 'playing';
++      navigator.mediaSession.setActionHandler('play', () => {
++        if (delayedStartPending) { delayedStartPaused = false; maybeStartDelayedAudio(); return; }
++        audioEl?.play(); navigator.mediaSession.playbackState = 'playing';
++      });
++      navigator.mediaSession.setActionHandler('pause', () => {
++        if (delayedStartPending) {
++          delayedStartPaused = true; clearTimeout(delayedStartTimer); delayedStartTimer = null;
++        }
++        audioEl?.pause(); navigator.mediaSession.playbackState = 'paused';
++      });
++      navigator.mediaSession.playbackState = delayedStartPaused ? 'paused' : 'playing';
+ 
+       if (mediaRotateTimer) clearInterval(mediaRotateTimer);
+       mediaRotateTimer = setInterval(() => {
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index e9929e6..5700f4c 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -602,6 +602,25 @@
+         dense: false,
+       });
+ 
++        if (typeof global.getAudioDelayMs === "function" && typeof global.setAudioDelayMs === "function") {
++          this._appendDivider();
++          const delayWrap = utils.createElement("div", "settings-volume-wrap", null);
++          const delayValue = utils.createElement("span", "settings-volume-value", String(global.getAudioDelayMs()) + " ms");
++          const delay = utils.createElement("input", "settings-audio-delay-slider", null);
++          delay.type = "range"; delay.min = "0"; delay.max = "750"; delay.step = "25";
++          delay.style.width = "180px"; delay.style.accentColor = "var(--accent)";
++          delay.value = String(global.getAudioDelayMs()); delay.dataset.localAudioDelay = "true";
++          delay.setAttribute("aria-label", "Audio delay");
++          delay.addEventListener("input", () => { delayValue.textContent = String(delay.value) + " ms"; });
++          delay.addEventListener("change", () => {
++            if (token !== this._renderToken || this.activeSectionId !== "audio") return;
++            try { global.setAudioDelayMs(Number(delay.value)); } catch (_) {}
++            delay.value = String(global.getAudioDelayMs()); delayValue.textContent = delay.value + " ms";
++          });
++          delayWrap.appendChild(delayValue); delayWrap.appendChild(delay);
++          this._appendTile({ icon: "av_timer", title: "Audio delay", trailing: delayWrap, dense: false });
++        }
++
+       if (this.apiClient.browserAudioSupported) this.refreshDisplayControl(this.displayController.remoteDisplayState);
+       if (this.audioSettingsError) {
+         const status = utils.createElement("div", "settings-error", this.audioSettingsError);
+@@ -926,7 +945,9 @@
+       }
+       if (this.activeSectionId === "audio" && this.apiClient.browserAudioSupported) {
+         const allowed = this._audioSettingsAllowed(state);
+-        for (const input of this.content.querySelectorAll("input, button")) input.disabled = !allowed;
++        for (const input of this.content.querySelectorAll("input, button")) {
++          input.disabled = input.dataset?.localAudioDelay === "true" ? false : !allowed;
++        }
+         return;
+       }
+       if (this.activeSectionId === "gps" && this.apiClient.browserGpsManaged) {

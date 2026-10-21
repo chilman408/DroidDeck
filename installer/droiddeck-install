@@ -1,0 +1,61 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-only
+import os
+from pathlib import Path
+import sys
+
+args = sys.argv[1:]
+base = Path(__file__).resolve().parent / 'src/runtime/portable'
+binary, flags = '/usr/bin/python3', ['-I', '-B']
+if args in ([mode] for mode in ('--install-host', '--resume-host', '--inspect-host')):
+    script = 'host-prerequisites.py'
+elif len(args) == 2 and args[0] in ('--prepare-user-session', '--resume-user-session', '--inspect-user-session'):
+    script = 'prepare-user-session.py'
+elif args in ([mode] for mode in ('--stage-installer-sources', '--resume-installer-sources', '--inspect-installer-sources',
+                                '--stage-gpu-sources', '--resume-gpu-sources', '--inspect-gpu-sources')):
+    script = 'stage-installer-sources.py'
+elif len(args) == 4 and args[0] == '--install-machine':
+    script = 'install-machine.py'
+elif len(args) == 5 and args[0] in ('--install-registration', '--resume-registration') and args[-1] == '-':
+    script = 'install-registration.py'
+elif len(args) == 2 and args[0] in ('--acquire-build-inputs', '--acquire-image-inputs'):
+    script = 'acquire-inputs.py'
+elif len(args) == 4 and args[0] in ('--publish-install-inputs', '--verify-install-inputs'):
+    script = 'publish-install-inputs.py'
+elif len(args) == 3 and args[0] == '--prepare-install':
+    binary, flags = '/usr/bin/node', []
+    script, args = 'prepare-install.js', args[1:]
+elif len(args) == 7 and args[0] in ('--install-runtime', '--resume-runtime', '--verify-runtime') and args[-1] == '-':
+    script = 'install-runtime.py'
+elif len(args) == 1 and args[0] in ('--initialize-local-tls', '--resume-local-tls', '--inspect-local-tls'):
+    script = 'setup-local-tls.py'
+elif len(args) == 3 and args[0] == '--reproduce-artifacts':
+    binary, flags = '/usr/bin/node', []
+    script, args = 'artifact-build.js', ['reproduce', *args[1:]]
+elif args == ['--inspect-defaults']:
+    script, args = 'installation-defaults.py', ['--inspect']
+elif len(args) == 2 and args[0] == '--initialize-defaults':
+    script, args = 'installation-defaults.py', ['--initialize', args[1]]
+elif args == ['--help']:
+    print('DroidDeck source candidate, not a complete installer.\n'
+          'Signed Ubuntu26.04 host setup (root): --install-host|--resume-host|--inspect-host\n'
+          'Persistent user audio/video session (root): --prepare-user-session|--resume-user-session|--inspect-user-session USER\n'
+          'Protected recipe/GPU sources (root): --stage-installer-sources|--resume-installer-sources|--inspect-installer-sources\n'
+          'Late GPU recovery sources (root, AFTER registration/extensions): --stage-gpu-sources|--resume-gpu-sources|--inspect-gpu-sources\n'
+          'Clean machine CANDIDATE (root): --install-machine USER PRIVATE_IPV4 HOSTNAME\n'
+          'Registration: --install-registration USER ASSEMBLY RECIPES -\n'
+          'Recovery: --resume-registration USER ASSEMBLY RECIPES -\n'
+          'Offline runtime: --install-runtime|--resume-runtime|--verify-runtime USER ASSEMBLY RECIPES FRONTEND COMPAT_SOURCE -\n'
+          'Local HTTPS (configured user, not root): --initialize-local-tls|--resume-local-tls|--inspect-local-tls\n'
+          'Build twice (unprivileged): --reproduce-artifacts PUBLISHER_INPUTS_JSON NEW_OUTPUT\n'
+          'Acquire (unprivileged): --acquire-build-inputs|--acquire-image-inputs NEW_OUTPUT\n'
+          'Prepare (unprivileged): --prepare-install ACQUIRED_BUILD_INPUTS NEW_OUTPUT\n'
+          'Protected assemblies (root): --publish-install-inputs|--verify-install-inputs USER PREPARED_INPUTS ROOT_PRIVATE_OUTPUT\n'
+          'Defaults: --inspect-defaults or --initialize-defaults PUBLISHER_APK')
+    sys.exit(0)
+else:
+    print('Explicit supported installation phase required; no changes performed', file=sys.stderr)
+    sys.exit(1)
+os.execve(binary, [binary, *flags, str(base / script), *args],
+          {'PATH': '/usr/bin:/bin', 'LANG': 'C', 'LC_ALL': 'C',
+           'JAVA_HOME': '/usr/lib/jvm/java-17-openjdk-amd64'})
