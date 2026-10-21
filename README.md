@@ -20,6 +20,85 @@ Android images, APKs, SDK tools and third-party libraries are not bundled here.
 Review [pilot requirements](docs/PILOT.md) and
 [known limitations](docs/KNOWN_LIMITATIONS.md) before installing.
 
+## Installation
+
+### 1. Prepare a Clean VM
+
+Use a **fresh Ubuntu 26.04.1 x86_64 VM** with working **VirGL 3D graphics**,
+128 GiB disk, 6 GiB RAM, and Internet access. Create a regular administrative
+user (the tested layout is UID/GID 1000) and reserve the VM's LAN IPv4 address.
+Run the commands below inside that Ubuntu VM, not on the Unraid host.
+
+**Do not install over an existing DroidDeck or Android setup.** This pilot is
+not an upgrader and refuses populated or partially installed targets.
+
+### 2. Download and Verify
+
+Download these five assets from the
+[0.1.0-rc.1 release](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1)
+into the same directory on the VM:
+
+- `droiddeck-0.1.0-rc.1-source.tar`
+- `INSTALL.md`
+- `COPYING`
+- `release.json`
+- `SHA256SUMS`
+
+Do not use GitHub's automatic **Source code (zip)** or **Source code (tar.gz)**
+downloads. In a terminal, change to your download directory and run:
+
+```sh
+sha256sum -c SHA256SUMS
+```
+
+**Continue only if every listed file reports `OK`.** Obtain the checksums from
+the trusted release page; a checksum does not authenticate its own source.
+
+### 3. Install
+
+Extract the verified source into a new, root-owned directory:
+
+```sh
+sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.1 &&
+sudo tar --no-same-owner --no-same-permissions \
+  -xf droiddeck-0.1.0-rc.1-source.tar \
+  -C /usr/local/share/droiddeck-0.1.0-rc.1
+```
+
+After successful extraction, replace `YOUR_UBUNTU_USER` with the administrative
+username and `YOUR_VM_IPV4` with the VM's reserved private LAN address. Leave
+`droiddeck.invalid` unchanged:
+
+```sh
+sudo python3 -I -B \
+  /usr/local/share/droiddeck-0.1.0-rc.1/droiddeck-source-candidate/droiddeck-install \
+  --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
+```
+
+The installer downloads publisher-hosted dependencies, checks their pins,
+compares two builds, verifies Android GPU rendering, and starts the services.
+Keep the terminal or SSH connection open until all installation phases finish.
+If a phase fails, **do not rerun the installer or delete partial state**; retain
+the journals and follow [recovery guidance](docs/INSTALL.md#recovery-and-scope).
+
+### 4. Connect from Your Browser
+
+Open `https://YOUR_VM_IPV4:8443/` after installation succeeds. Verify the VM's
+public certificate fingerprint through your authenticated VM connection:
+
+```sh
+openssl x509 -in ~/.config/droiddeck/cert.pem -noout -sha256 -fingerprint
+```
+
+Run that command as the selected Ubuntu user. Explicitly trust that **public**
+certificate on each client, or use an authenticated trusted reverse proxy.
+Never export `key.pem` or disable TLS verification globally. Browser login is
+**off by default**: keep the VM on a trusted LAN and do not port-forward it.
+
+Check video, audio after a browser gesture, touch, and reconnect after reboot.
+See the [full installation guide](docs/INSTALL.md) and
+[pilot validation checklist](docs/PILOT.md#install-and-validate) for details.
+
 ## Tested Scope
 
 - Fresh Ubuntu 26.04.1 x86_64 on Unraid KVM, 128 GiB virtual disk and 6 GiB RAM.
