@@ -1,5 +1,12 @@
 # Known Limitations
 
+## Required rc.1 Reboot Hotfix
+
+The original rc.1 installer requires [Pilot Reboot Hotfix 1](../patches/reboot-hotfix-1/README.md)
+for interrupted-startup recovery and longer configured-Android startup waits.
+Apply it after a new installation before rebooting, or to an existing pilot VM.
+Do not reinstall or clear Android data to address this issue.
+
 - Source-only release candidate, not a prebuilt VM or general in-place updater.
 - Acceptance is limited to the documented Ubuntu/Unraid/VirGL configuration and
   first regular user. Other GPU/host/account combinations need separate testing.

@@ -9,6 +9,12 @@ Android streamed to your browser from an Ubuntu virtual machine.
 **0.1.0-rc.1 is an early source release candidate for a small technical pilot.**
 It is not a prebuilt VM image, an Android distribution, or an in-place upgrader.
 
+**Required reboot fix:** install [Pilot Reboot Hotfix 1](patches/reboot-hotfix-1/README.md)
+on existing rc.1 VMs and after a new rc.1 installation, before its first reboot.
+It fixes interrupted-startup recovery and a short Android startup timeout without
+reinstalling Android or clearing apps/login data. Original release assets remain
+unchanged; the hotfix is distributed separately.
+
 Use the five assets attached to the `v0.1.0-rc.1` GitHub prerelease. Verify
 `SHA256SUMS`, then follow the [installation guide](docs/INSTALL.md). Use the
 named release asset, not GitHub's automatically generated repository source ZIP.
@@ -78,6 +84,7 @@ sudo python3 -I -B \
 The installer downloads publisher-hosted dependencies, checks their pins,
 compares two builds, verifies Android GPU rendering, and starts the services.
 Keep the terminal or SSH connection open until all installation phases finish.
+Then apply [Pilot Reboot Hotfix 1](patches/reboot-hotfix-1/README.md) before rebooting.
 If a phase fails, **do not rerun the installer or delete partial state**; retain
 the journals and follow [recovery guidance](docs/INSTALL.md#recovery-and-scope).
 

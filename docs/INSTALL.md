@@ -1,5 +1,10 @@
 # DroidDeck 0.1.0-rc.1
 
+**Required update:** apply [Pilot Reboot Hotfix 1](../patches/reboot-hotfix-1/README.md)
+after installation and before the first reboot. Existing pilot VMs can apply it
+without reinstalling Android or clearing apps/login data. The original release
+assets are unchanged; the hotfix is a separate source patch.
+
 Initial Ubuntu/Unraid installation release candidate. Not a signed binary release
 or an in-place upgrader. Tested environment: fresh Ubuntu26.04.1 x86_64, first
 regular user UID1000, Unraid KVM with working VirGL3D,128GiB disk and6GiB RAM.
