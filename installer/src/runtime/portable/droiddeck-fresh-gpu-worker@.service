@@ -12,6 +12,6 @@ WorkingDirectory=/
 ExecStart=/usr/bin/python3 -B /var/lib/droiddeck/gpu-recovery/runtime/portable/fresh-gpu.py --activate %i
 Restart=no
 KillMode=control-group
-TimeoutStartSec=300s
+TimeoutStartSec=450s
 TimeoutStopSec=70s
 UMask=0077

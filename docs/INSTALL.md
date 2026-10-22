@@ -1,9 +1,8 @@
-# DroidDeck 0.1.0-rc.1
+# DroidDeck 0.1.0-rc.2
 
-**Required update:** apply [Pilot Reboot Hotfix 1](../patches/reboot-hotfix-1/README.md)
-after installation and before the first reboot. Existing pilot VMs can apply it
-without reinstalling Android or clearing apps/login data. The original release
-assets are unchanged; the hotfix is a separate source patch.
+The reboot hotfix is integrated. New installations use this one source installer;
+no separate rc.1 hotfix is needed. Existing configured rc.1 VMs should use their
+dedicated hotfix instead of rerunning this clean installer over Android data.
 
 Initial Ubuntu/Unraid installation release candidate. Not a signed binary release
 or an in-place upgrader. Tested environment: fresh Ubuntu26.04.1 x86_64, first
@@ -25,9 +24,9 @@ are included. Community images are not bundled or mirrored.
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.1
-sudo tar --no-same-owner --no-same-permissions -xf droiddeck-0.1.0-rc.1-source.tar -C /usr/local/share/droiddeck-0.1.0-rc.1
-sudo python3 -I -B /usr/local/share/droiddeck-0.1.0-rc.1/droiddeck-source-candidate/droiddeck-install --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
+sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.2
+sudo tar --no-same-owner --no-same-permissions -xf droiddeck-0.1.0-rc.2-source.tar -C /usr/local/share/droiddeck-0.1.0-rc.2
+sudo python3 -I -B /usr/local/share/droiddeck-0.1.0-rc.2/droiddeck-source-candidate/droiddeck-install --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
 ```
 
 Use the VM's actual private LAN IPv4 address. A fixed/reserved address is needed

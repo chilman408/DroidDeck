@@ -35,6 +35,8 @@ OnFailure=droiddeck-session-recovery.service
 [Service]
 RestartMode=direct
 ''',
+    '/etc/systemd/system/tesla-waydroid-headless-session.service.d/90-droiddeck-startup.conf':
+        b'[Service]\nTimeoutStartSec=180s\n',
 }
 RESET_JOURNAL = '/var/lib/droiddeck/session-recovery-reset-registration'
 RESET_FILES = {

@@ -6,149 +6,128 @@ Android streamed to your browser from an Ubuntu virtual machine.
 
 ## Pilot Release
 
-**0.1.0-rc.1 is an early source release candidate for a small technical pilot.**
-It is not a prebuilt VM image, an Android distribution, or an in-place upgrader.
+**0.1.0-rc.2 is an early technical pilot with the reboot fix integrated.**
+New installations use one source installer and one installation command. No
+separate hotfix is needed. This is not a prebuilt VM or a general in-place updater.
 
-**Required reboot fix:** install [Pilot Reboot Hotfix 1](patches/reboot-hotfix-1/README.md)
-on existing rc.1 VMs and after a new rc.1 installation, before its first reboot.
-It fixes interrupted-startup recovery and a short Android startup timeout without
-reinstalling Android or clearing apps/login data. Original release assets remain
-unchanged; the hotfix is distributed separately.
-
-Use the five assets attached to the `v0.1.0-rc.1` GitHub prerelease. Verify
-`SHA256SUMS`, then follow the [installation guide](docs/INSTALL.md). Use the
-named release asset, not GitHub's automatically generated repository source ZIP.
-The release TAR is the exact immutable package used for installation testing.
-
-The source installer downloads pinned inputs from their publishers, builds and
-compares two artifact sets, and installs the completed services. Community
-Android images, APKs, SDK tools and third-party libraries are not bundled here.
-Review [pilot requirements](docs/PILOT.md) and
-[known limitations](docs/KNOWN_LIMITATIONS.md) before installing.
+Already running rc.1? Keep your apps and login data and use
+[its dedicated hotfix](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1-hotfix.1).
+Do not run the clean installer over an existing Android setup.
 
 ## Installation
 
 ### 1. Prepare a Clean VM
 
-Use a **fresh Ubuntu 26.04.1 x86_64 VM** with working **VirGL 3D graphics**,
-128 GiB disk, 6 GiB RAM, and Internet access. Create a regular administrative
-user (the tested layout is UID/GID 1000) and reserve the VM's LAN IPv4 address.
-Run the commands below inside that Ubuntu VM, not on the Unraid host.
-
-**Do not install over an existing DroidDeck or Android setup.** This pilot is
-not an upgrader and refuses populated or partially installed targets.
+Use fresh **Ubuntu 26.04.1 x86_64** on Unraid KVM with working **VirGL 3D**,
+128 GiB disk, 6 GiB RAM, Internet access, and a reserved LAN IPv4 address.
+Create the first regular administrative user (tested UID/GID 1000). Run the
+commands inside Ubuntu, not on the Unraid host. The installer refuses populated
+or partially installed targets; it does not upgrade or erase them.
 
 ### 2. Download and Verify
 
-Download these five assets from the
-[0.1.0-rc.1 release](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1)
-into the same directory on the VM:
+Download all five named assets from the
+[rc.2 release](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.2)
+into one directory on the VM:
 
-- `droiddeck-0.1.0-rc.1-source.tar`
+- `droiddeck-0.1.0-rc.2-source.tar`
 - `INSTALL.md`
 - `COPYING`
 - `release.json`
 - `SHA256SUMS`
 
-Do not use GitHub's automatic **Source code (zip)** or **Source code (tar.gz)**
-downloads. In a terminal, change to your download directory and run:
+The TAR is the single installer package; the other files provide instructions,
+licensing, acceptance metadata and checksums. Do not use GitHub's automatic
+**Source code (zip)** or **Source code (tar.gz)** downloads instead.
+
+In the download directory, verify before root extraction:
 
 ```sh
 sha256sum -c SHA256SUMS
 ```
 
-**Continue only if every listed file reports `OK`.** Obtain the checksums from
-the trusted release page; a checksum does not authenticate its own source.
+Continue only when every file reports `OK`. Obtain the checksums from the trusted
+release channel; a checksum does not authenticate its own download source.
 
 ### 3. Install
 
-Extract the verified source into a new, root-owned directory:
+Extract the verified source into a new root-owned directory:
 
 ```sh
-sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.1 &&
+sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.2 &&
 sudo tar --no-same-owner --no-same-permissions \
-  -xf droiddeck-0.1.0-rc.1-source.tar \
-  -C /usr/local/share/droiddeck-0.1.0-rc.1
+  -xf droiddeck-0.1.0-rc.2-source.tar \
+  -C /usr/local/share/droiddeck-0.1.0-rc.2
 ```
 
-After successful extraction, replace `YOUR_UBUNTU_USER` with the administrative
-username and `YOUR_VM_IPV4` with the VM's reserved private LAN address. Leave
-`droiddeck.invalid` unchanged:
+Replace `YOUR_UBUNTU_USER` with your administrative username and `YOUR_VM_IPV4`
+with the reserved private LAN address. Leave `droiddeck.invalid` unchanged:
 
 ```sh
 sudo python3 -I -B \
-  /usr/local/share/droiddeck-0.1.0-rc.1/droiddeck-source-candidate/droiddeck-install \
+  /usr/local/share/droiddeck-0.1.0-rc.2/droiddeck-source-candidate/droiddeck-install \
   --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
 ```
 
-The installer downloads publisher-hosted dependencies, checks their pins,
-compares two builds, verifies Android GPU rendering, and starts the services.
-Keep the terminal or SSH connection open until all installation phases finish.
-Then apply [Pilot Reboot Hotfix 1](patches/reboot-hotfix-1/README.md) before rebooting.
-If a phase fails, **do not rerun the installer or delete partial state**; retain
-the journals and follow [recovery guidance](docs/INSTALL.md#recovery-and-scope).
+Keep the terminal or SSH connection open until installation completes. The
+installer acquires publisher-hosted inputs, compares two native/Java/library
+builds, installs the complete services and verifies real Android GPU rendering.
+The reboot fix and bounded startup waits are installed automatically.
 
-### 4. Connect from Your Browser
+If installation stops, do not rerun it or delete partial state. Preserve its
+journals and follow the [recovery guidance](docs/INSTALL.md#recovery-and-scope).
 
-Open `https://YOUR_VM_IPV4:8443/` after installation succeeds. Verify the VM's
-public certificate fingerprint through your authenticated VM connection:
+### 4. Connect
+
+Open `https://YOUR_VM_IPV4:8443/` after installation succeeds. As the selected
+Ubuntu user, inspect the public TLS certificate through your authenticated VM
+connection before trusting it on each client:
 
 ```sh
 openssl x509 -in ~/.config/droiddeck/cert.pem -noout -sha256 -fingerprint
 ```
 
-Run that command as the selected Ubuntu user. Explicitly trust that **public**
-certificate on each client, or use an authenticated trusted reverse proxy.
-Never export `key.pem` or disable TLS verification globally. Browser login is
-**off by default**: keep the VM on a trusted LAN and do not port-forward it.
+Trust only that public certificate, or use an authenticated trusted reverse
+proxy. Never export `key.pem` or disable TLS verification globally. Optional
+browser login defaults **off**: trusted LAN only, no Internet port forwarding.
 
 Check video, audio after a browser gesture, touch, and reconnect after reboot.
-See the [full installation guide](docs/INSTALL.md) and
-[pilot validation checklist](docs/PILOT.md#install-and-validate) for details.
+Android should start before an interactive Ubuntu login. See the
+[full guide](docs/INSTALL.md), [pilot checklist](docs/PILOT.md) and
+[known limitations](docs/KNOWN_LIMITATIONS.md).
 
 ## Tested Scope
 
-- Fresh Ubuntu 26.04.1 x86_64 on Unraid KVM, 128 GiB virtual disk and 6 GiB RAM.
-- Working VirGL 3D graphics, with native Android GPU verification.
-- Clean installation through all 35 phases, independently reproduced source
-  archives on Windows and Linux, and two matching native/Java/library builds.
-- Automatic full-display recovery after a killed Android session, original GPU
-  profile restoration, and service startup after reboot before interactive login.
-- Desktop/mobile browser H264 video and AAC audio, native touch after idle,
-  and two-display role handoff with continuing audio.
+- Fresh whole-command installation with independently reproducible source TARs
+  and two compared artifact builds.
+- Native VirGL GPU rendering; intentional software codec4/RGBX/AAC media decoding.
+- Normal reboot, reboot interrupted during Android startup, and startup taking
+  longer than the original 60-second limit.
+- Full-display crash recovery, desktop/mobile H264 and AAC, native touch after
+  idle, and two-display handoff with continuing audio.
 
-Android rendering uses the GPU. Software media decoding with codec4/RGBX/AAC is
-intentional; these are different parts of the pipeline. Legacy H264 support is
-retained. This is not a claim that every app, browser, GPU or DRM service works.
+This is not a guarantee for every app, GPU, browser, vehicle or DRM service.
+Community images, APKs, SDK tools and third-party libraries are fetched from
+their publishers, not bundled or mirrored in the release.
 
 ## Defaults and Safety
 
 Aurora Store is installed by default. Initial browser-route media volume is
-100%, and the initial Android lockscreen is disabled. Later user choices are
+100% and the initial Android lockscreen is disabled. Later user choices are
 preserved. Do not replace the image's Google Play Services through Aurora.
+Test vehicle browsers only while parked.
 
-Optional browser authentication defaults **off**. Keep DroidDeck on a trusted
-LAN; do not forward its port to the Internet. Explicitly verify and trust the
-VM's public TLS certificate, or use an authenticated trusted reverse proxy.
-Never upload Android data, passwords, private keys, account tokens or DRM files.
-Use a separate disposable VM for installer tests, not a configured daily-use VM.
-Test vehicle browser behavior only while parked.
-
-## Feedback
-
-Open an issue with your host/guest versions, GPU mode, browser version, exact
-reproduction steps, and the failing installation phase if applicable. Redact
-logs first. Do not attach VM disks, Android data, full environment dumps or TLS
-private keys. Report security concerns as described in [SECURITY.md](SECURITY.md).
+Never upload Android data, VM disks, credentials, account tokens, private keys
+or DRM files. Report selected redacted errors, host/guest/browser versions and
+the failing installation phase. See [SECURITY.md](SECURITY.md) for security reports.
 
 ## Source and License
 
-`installer/` contains the unmodified contents of the accepted source TAR. Its
-internal candidate flags are frozen build-time metadata; the release asset
-`release.json` records the later acceptance for those exact bytes. The public
-repository starts with a clean history and excludes private development logs.
+`installer/` holds the exact accepted source TAR contents. Frozen build-time
+candidate flags are not rewritten after testing; release `release.json` records
+acceptance for those exact bytes. Old release tags/assets remain immutable.
+Private development history and operational checkpoints are not published.
 
-DroidDeck source is GPL-3.0-only; see [LICENSE](LICENSE). Upstream components
-retain their own licenses. Project names identify integrations, not endorsement
-or app-store, account, certification or DRM compatibility guarantees. This pilot
-is checksum-verified but is not digitally signed.
+DroidDeck source is GPL-3.0-only; see [LICENSE](LICENSE). Upstream components keep
+their own licenses. No third-party endorsement, certification or account/DRM
+compatibility is asserted. This pilot is checksum-verified, not digitally signed.

@@ -64,11 +64,39 @@ def configure(token):
 
 
 class Fresh(G.Activation):
+    SESSION_START_TIMEOUT = 210
+
     def __init__(self, p, admission):
         super().__init__(p)
         self.admission = admission
         self.pins = admission['metadataSha256'], admission['guestReceiptSha256']
         self.config = admission['configuration']
+
+    def resume_boot(self):
+        with self.store.lock():
+            state = self.store.status()
+            if state['boot'] == G.boot_id() or state['stage'] not in ('ready', 'starting', 'verifying-native'):
+                return
+            # These stages follow completed profile changes. A reboot can interrupt
+            # service startup, but must never replay activation or resume a mutator.
+            self.metadata()
+            G.require_quiet(G.unit(G.WORKER))
+            if G.sha(G.protected_read(G.WORK / 'waydroid.cfg', 0o644)) != G.GPU:
+                raise ValueError('Original installed GPU profile required for boot resume')
+            self.store.stage('starting')
+        G.command(['/usr/bin/systemctl', 'start', G.UNITS[3], G.UNITS[2], G.UNITS[1]], timeout=self.SESSION_START_TIMEOUT)
+        deadline = G.time.monotonic() + 150
+        while G.time.monotonic() < deadline:
+            try:
+                healthy = self.native()
+            except (OSError, ValueError, G.subprocess.SubprocessError):
+                healthy = False
+            if healthy:
+                self.store.stage('ready')
+                G.command(['/usr/bin/systemctl', 'start', '--no-block', G.UNITS[0]])
+                return
+            G.time.sleep(5)
+        self.store.stage('recovery-required')
 
     def restart_session(self):
         # A container-only restart can crash its retained Weston compositor and
@@ -92,7 +120,7 @@ class Fresh(G.Activation):
                 if failed:
                     G.command(['/usr/bin/systemctl', 'reset-failed', *failed], timeout=15)
                 G.command(['/usr/bin/systemctl', 'start', G.UNITS[3]], timeout=45)
-                G.command(['/usr/bin/systemctl', 'start', G.UNITS[2], G.UNITS[1]], timeout=90)
+                G.command(['/usr/bin/systemctl', 'start', G.UNITS[2], G.UNITS[1]], timeout=self.SESSION_START_TIMEOUT)
                 deadline = time.monotonic() + 120
                 while time.monotonic() < deadline:
                     if self.native():
@@ -232,24 +260,8 @@ def main(args):
     if args[0] == '--restart-session':
         return activation.restart_session()
     if args[0] == '--watch':
-        state = activation.store.status()
         notify()
-        if state['boot'] != G.boot_id() and state['stage'] == 'ready':
-            activation.store.stage('starting')
-            G.command(['/usr/bin/systemctl', 'start', G.UNITS[3], G.UNITS[2], G.UNITS[1]], timeout=120)
-            deadline = G.time.monotonic() + 150
-            while G.time.monotonic() < deadline:
-                try:
-                    healthy = activation.native()
-                except (OSError, ValueError, G.subprocess.SubprocessError):
-                    healthy = False
-                if healthy:
-                    activation.store.stage('ready')
-                    G.command(['/usr/bin/systemctl', 'start', '--no-block', G.UNITS[0]])
-                    break
-                G.time.sleep(5)
-            else:
-                activation.store.stage('recovery-required')
+        activation.resume_boot()
         return activation.watch(policy)
     if args[0] == '--inspect':
         print(json.dumps({'status': activation.store.status(), 'nativeGpuVerified': activation.native()}))

@@ -41,6 +41,69 @@ class Admission(unittest.TestCase):
         self.assertNotIn('RuntimeMaxSec', watcher)
 
 
+class BootResume(unittest.TestCase):
+    def test_configured_android_deadline_is_bounded_and_waiter_outlives_session(self):
+        self.assertGreater(F.Fresh.SESSION_START_TIMEOUT, 180)
+        self.assertLess(F.Fresh.SESSION_START_TIMEOUT, 450)
+
+    def operation(self, *, stage='starting', boot='previous-boot', profile=None, worker=None,
+                  native=True, failure=None):
+        self.state = {'stage': stage, 'boot': boot}
+        self.stages, self.commands = [], []
+        def change(value):
+            self.stages.append(value)
+            self.state.update(stage=value, boot='current-boot')
+        activation = SimpleNamespace(
+            store=SimpleNamespace(lock=lambda: nullcontext(), status=lambda: dict(self.state), stage=change),
+            metadata=lambda: None, native=lambda: native, SESSION_START_TIMEOUT=F.Fresh.SESSION_START_TIMEOUT)
+        def command(args, **kwargs):
+            self.commands.append(args)
+            if failure:
+                raise failure
+        worker = worker or {'ActiveState': 'inactive', 'MainPID': '0', 'ControlPID': '0'}
+        with patch.object(F.G, 'boot_id', return_value='current-boot'), \
+                patch.object(F.G, 'unit', return_value=worker), \
+                patch.object(F.G, 'protected_read', return_value=b'generated-profile'), \
+                patch.object(F.G, 'sha', return_value=F.G.GPU if profile is None else profile), \
+                patch.object(F.G, 'command', side_effect=command):
+            F.Fresh.resume_boot(activation)
+
+    def test_ready_and_interrupted_post_mutation_stages_resume_without_activation_replay(self):
+        for stage in ('ready', 'starting', 'verifying-native'):
+            self.operation(stage=stage)
+            self.assertEqual(self.stages, ['starting', 'ready'])
+            self.assertEqual(self.commands, [
+                ['/usr/bin/systemctl', 'start', F.G.UNITS[3], F.G.UNITS[2], F.G.UNITS[1]],
+                ['/usr/bin/systemctl', 'start', '--no-block', F.G.UNITS[0]]])
+
+    def test_same_boot_and_mutating_or_restored_states_are_not_rearmed(self):
+        for stage, boot in [('starting', 'current-boot')] + [
+                (stage, 'previous-boot') for stage in ('prepared', 'installing', 'recovering', 'restored', 'recovery-required')]:
+            self.operation(stage=stage, boot=boot)
+            self.assertEqual((self.stages, self.commands), ([], []))
+
+    def test_foreign_profile_and_live_mutator_refuse_resume_before_state_change(self):
+        for kwargs in ({'profile': F.G.CPU},
+                       {'worker': {'ActiveState': 'active', 'MainPID': '100', 'ControlPID': '0'}}):
+            with self.assertRaises(ValueError):
+                self.operation(**kwargs)
+            self.assertEqual((self.stages, self.commands), ([], []))
+
+    def test_shutdown_interruption_retains_resumable_stage(self):
+        with self.assertRaises(OSError):
+            self.operation(failure=OSError('generated cancelled startup'))
+        self.assertEqual(self.state, {'stage': 'starting', 'boot': 'current-boot'})
+        self.assertEqual(self.stages, ['starting'])
+        self.operation(stage=self.state['stage'], boot='previous-boot')
+        self.assertEqual(self.stages, ['starting', 'ready'])
+
+    def test_unverified_native_startup_never_exposes_runtime(self):
+        with patch.object(F.time, 'monotonic', side_effect=[0, 151]):
+            self.operation(native=False)
+        self.assertEqual(self.stages, ['starting', 'recovery-required'])
+        self.assertEqual(len(self.commands), 1)
+
+
 class SessionRecovery(unittest.TestCase):
     def owner(self, **changes):
         return {'ActiveState': 'activating', 'MainPID': str(os.getpid()), 'ControlPID': '0', **changes}
@@ -61,7 +124,8 @@ class SessionRecovery(unittest.TestCase):
     def operation(self, *, stage='ready', fail=None, native=True):
         self.events, self.stages = [], []
         store = SimpleNamespace(lock=lambda: nullcontext(), status=lambda: {'stage': stage, 'boot': 'generated-boot'}, stage=self.stages.append)
-        activation = SimpleNamespace(store=store, metadata=lambda: self.events.append('metadata'), native=lambda: native)
+        activation = SimpleNamespace(store=store, metadata=lambda: self.events.append('metadata'), native=lambda: native,
+                                     SESSION_START_TIMEOUT=F.Fresh.SESSION_START_TIMEOUT)
         def command(args, **kwargs):
             self.events.append(args)
             if args == fail: raise OSError('generated failure')

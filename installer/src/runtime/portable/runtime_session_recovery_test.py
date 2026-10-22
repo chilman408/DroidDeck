@@ -16,17 +16,26 @@ spec.loader.exec_module(S)
 
 class Boundary(unittest.TestCase):
     def test_bounded_failure_only_recipe_has_no_healthy_runtime_deadline(self):
-        unit, dropin = S.FILES.values()
+        unit = S.FILES['/etc/systemd/system/droiddeck-session-recovery.service']
+        dropin = S.FILES['/etc/systemd/system/tesla-waydroid-headless-session.service.d/70-droiddeck-recovery.conf']
         self.assertIn(b'ExecStart=/usr/bin/python3 -I -B /var/lib/droiddeck/gpu-recovery/runtime/portable/fresh-gpu.py --restart-session\n', unit)
         self.assertIn(b'TimeoutStartSec=420s\n', unit)
         self.assertIn(b'StartLimitBurst=2\n', unit)
         self.assertIn(b'RestartMode=direct\n', dropin)
         self.assertIn(b'OnFailure=droiddeck-session-recovery.service\n', dropin)
-        for raw in (unit, dropin):
+        for raw in S.FILES.values():
             for text in (b'RuntimeMax', b'OnCalendar', b'OnActiveSec', b'WantedBy', b'rm ', b'sh -c', b'Account'):
                 self.assertNotIn(text, raw)
         self.assertEqual(list(S.RESET_FILES.values()),
             [b'[Service]\nExecStartPre=/usr/bin/systemctl reset-failed tesla-waydroid-headless-session.service\n'])
+
+    def test_fresh_registration_extends_startup_without_changing_pinned_base_recipe(self):
+        self.assertEqual(S.FILES['/etc/systemd/system/tesla-waydroid-headless-session.service.d/90-droiddeck-startup.conf'],
+                         b'[Service]\nTimeoutStartSec=180s\n')
+        source = Path(__file__).with_name('headless-owned-bundle.js').read_text()
+        self.assertIn('TimeoutStartSec=60s', source)
+        worker = Path(__file__).with_name('droiddeck-fresh-gpu-worker@.service').read_text()
+        self.assertIn('TimeoutStartSec=450s', worker)
 
     def test_closed_cli_redacts_arbitrary_inputs(self):
         with mock.patch.object(S.R.A, '_root_linux'):

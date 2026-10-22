@@ -13,7 +13,7 @@ import sys
 import tarfile
 import tempfile
 
-SOURCE_REVISION = '625a929fcc9493207659a73cbb12c7ef2464d9e9'
+SOURCE_REVISION = 'f04b0cae18894fe8e217938d13f7b32c24148177'
 PREFIXES = ('runtime/', 'tools/', 'build/', 'config/', 'tests/native/', 'tests/java/')
 SUFFIXES = {'.bp', '.c', '.conf', '.cpp', '.example', '.gitignore', '.h', '.java', '.js',
             '.json', '.md', '.pam', '.patch', '.py', '.service', '.sh', '.txt', '.xml'}

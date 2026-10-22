@@ -212,6 +212,8 @@ class Store:
 
 
 class Activation:
+    SESSION_START_TIMEOUT = 70
+
     def __init__(self, p):
         self.p, self.c = p, p.load_copier()
         self.store = Store(p, self.c)
@@ -347,7 +349,7 @@ class Activation:
                 watcher_armed()
                 self.store.stage('starting')
                 command(['/usr/bin/systemctl', 'start', UNITS[3]], timeout=70)
-                command(['/usr/bin/systemctl', 'start', UNITS[2], UNITS[1]], timeout=70)
+                command(['/usr/bin/systemctl', 'start', UNITS[2], UNITS[1]], timeout=self.SESSION_START_TIMEOUT)
                 self.store.stage('verifying-native')
                 deadline = time.monotonic() + 150
                 while time.monotonic() < deadline:

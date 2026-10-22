@@ -11,13 +11,19 @@ import sys
 spec = importlib.util.spec_from_file_location('release_source_builder', Path(__file__).with_name('release-package.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
-VERSION = '0.1.0-rc.1'
+VERSION = '0.1.0-rc.2'
 LICENSE_SHA = '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
 GATES = ('freshInstall', 'sourceReproducible', 'tls', 'browserDesktop', 'browserMobile',
-         'media', 'gpu', 'defaults', 'rebootBeforeLogin', 'recovery', 'nativeTouchAfterIdle', 'roleHandoff')
+         'media', 'gpu', 'defaults', 'rebootBeforeLogin', 'recovery', 'nativeTouchAfterIdle', 'roleHandoff',
+         'interruptedStartupReboot', 'slowAndroidStartup')
 FIELDS = {'version', 'sourceRevision', 'candidateSha256', 'freshBootId', 'rebootBootId',
+          'interruptedBootId', 'recoveredBootId', 'slowStartupSeconds',
           'phaseCount', 'idleSeconds', 'videoFrames', 'toneHz', 'gates', 'verificationCheckpoint'}
-INSTALL = b'''# DroidDeck 0.1.0-rc.1
+INSTALL = b'''# DroidDeck 0.1.0-rc.2
+
+The reboot hotfix is integrated. New installations use this one source installer;
+no separate rc.1 hotfix is needed. Existing configured rc.1 VMs should use their
+dedicated hotfix instead of rerunning this clean installer over Android data.
 
 Initial Ubuntu/Unraid installation release candidate. Not a signed binary release
 or an in-place upgrader. Tested environment: fresh Ubuntu26.04.1 x86_64, first
@@ -39,9 +45,9 @@ are included. Community images are not bundled or mirrored.
 
 ```sh
 sha256sum -c SHA256SUMS
-sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.1
-sudo tar --no-same-owner --no-same-permissions -xf droiddeck-0.1.0-rc.1-source.tar -C /usr/local/share/droiddeck-0.1.0-rc.1
-sudo python3 -I -B /usr/local/share/droiddeck-0.1.0-rc.1/droiddeck-source-candidate/droiddeck-install --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
+sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.2
+sudo tar --no-same-owner --no-same-permissions -xf droiddeck-0.1.0-rc.2-source.tar -C /usr/local/share/droiddeck-0.1.0-rc.2
+sudo python3 -I -B /usr/local/share/droiddeck-0.1.0-rc.2/droiddeck-source-candidate/droiddeck-install --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
 ```
 
 Use the VM's actual private LAN IPv4 address. A fixed/reserved address is needed
@@ -117,8 +123,11 @@ def acceptance(raw, candidate_sha, source_revision):
             or any(value['gates'][gate] is not True for gate in GATES)):
         raise ValueError('Complete exact-candidate acceptance required; no unchecked gates')
     uuid = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
-    if (not all(type(value[name]) is str and re.fullmatch(uuid, value[name]) for name in ('freshBootId', 'rebootBootId'))
+    if (not all(type(value[name]) is str and re.fullmatch(uuid, value[name]) for name in
+                ('freshBootId', 'rebootBootId', 'interruptedBootId', 'recoveredBootId'))
             or value['freshBootId'] == value['rebootBootId']
+            or len({value[name] for name in ('freshBootId', 'rebootBootId', 'interruptedBootId', 'recoveredBootId')}) != 4
+            or type(value['slowStartupSeconds']) is not int or not 65 <= value['slowStartupSeconds'] < 180
             or type(value['phaseCount']) is not int or value['phaseCount'] != 35
             or type(value['idleSeconds']) is not int or not 75 <= value['idleSeconds'] <= 3600
             or type(value['videoFrames']) is not int or not 8 <= value['videoFrames'] <= 1000000

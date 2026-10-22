@@ -19,6 +19,8 @@ class Promotion(unittest.TestCase):
                       'candidateSha256': D.B.sha(self.candidate),
                       'freshBootId': '11111111-1111-1111-1111-111111111111',
                       'rebootBootId': '22222222-2222-2222-2222-222222222222',
+                      'interruptedBootId': '33333333-3333-3333-3333-333333333333',
+                      'recoveredBootId': '44444444-4444-4444-4444-444444444444', 'slowStartupSeconds': 70,
                       'phaseCount': 35, 'idleSeconds': 75, 'videoFrames': 200, 'toneHz': 1007.8125,
                       'gates': dict.fromkeys(D.GATES, True),
                       'verificationCheckpoint': 'docs/checkpoints/fixture-acceptance.md'}
@@ -41,6 +43,8 @@ class Promotion(unittest.TestCase):
                           ('phaseCount', 34), ('phaseCount', True), ('idleSeconds', 74),
                           ('videoFrames', 0), ('toneHz', float('nan')), ('toneHz', True),
                           ('freshBootId', self.value['rebootBootId']),
+                          ('interruptedBootId', self.value['recoveredBootId']),
+                          ('slowStartupSeconds', 60), ('slowStartupSeconds', 180), ('slowStartupSeconds', True),
                           ('verificationCheckpoint', '../../private.json')]:
             with self.subTest(name=name, bad=bad), self.assertRaises(ValueError):
                 self.accept({**self.value, name: bad})

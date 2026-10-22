@@ -1,28 +1,23 @@
 # Known Limitations
 
-## Required rc.1 Reboot Hotfix
-
-The original rc.1 installer requires [Pilot Reboot Hotfix 1](../patches/reboot-hotfix-1/README.md)
-for interrupted-startup recovery and longer configured-Android startup waits.
-Apply it after a new installation before rebooting, or to an existing pilot VM.
-Do not reinstall or clear Android data to address this issue.
-
-- Source-only release candidate, not a prebuilt VM or general in-place updater.
-- Acceptance is limited to the documented Ubuntu/Unraid/VirGL configuration and
-  first regular user. Other GPU/host/account combinations need separate testing.
-- A GPU preflight and real native Android verification are required. Software
-  codec4/RGBX/AAC decoding is intentional and does not mean rendering lacks GPU
-  acceleration. No PNG video transport fallback is provided.
-- TLS certificates are local to each VM. Client trust is explicit, not installed
-  globally or bypassed. Authentication defaults off: trusted LAN only.
-- External publisher availability and pinned inputs are required. A changed
-  download must fail verification rather than silently selecting another image.
-- Google Play/account compatibility, certification and DRM are not guaranteed or
-  spoofed. Avoid replacing bundled Google Play Services through Aurora.
-- The Android Edge splash-screen issue and Apple TV investigation are deferred.
-- Browser audio can require a user gesture. Vehicle browsers require real-world
-  parked testing; desktop/mobile automated checks do not certify every vehicle.
-- Generated-video motion and audio-tone tests passed; no new numerical AV-sync
-  accuracy, universal app compatibility or production security claim is made.
-- SHA256 checksums and acceptance metadata are provided, but digital signing and
-  reproducible prebuilt binary distribution are not part of this pilot.
+- Source-only technical pilot, not a prebuilt VM or general in-place updater.
+- rc.2 includes the reboot fix. Configured rc.1 VMs should use
+  [their dedicated hotfix](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1-hotfix.1),
+  not reinstall over their Android data.
+- Tested Ubuntu 26.04.1 x86_64/Unraid KVM/VirGL configuration and first regular
+  administrative user only. Other host/GPU/account layouts need separate testing.
+- GPU preflight and real native Android verification are mandatory. Intentional
+  software codec4/RGBX/AAC media decoding is separate from GPU rendering.
+- Publisher input availability and independent pins are required. A changed
+  input fails verification instead of silently selecting a different image.
+- Local TLS requires explicit client trust. Browser authentication defaults off;
+  use a trusted LAN and do not forward the port to the Internet.
+- No certification, account or DRM spoofing. Google Play/account/app compatibility
+  is not guaranteed. Do not replace Google Play Services through Aurora.
+- Android Edge splash-screen and Apple TV investigations remain deferred.
+- Browser audio can require a user gesture. Vehicle browsers need real parked
+  testing; desktop/mobile checks do not certify every vehicle browser.
+- Generated media tests do not establish numerical AV-sync accuracy or universal
+  app compatibility. No PNG video fallback or healthy-service expiry is installed.
+- Checksums and acceptance records are not digital signatures. Reproducible
+  prebuilt binary distribution is outside this source pilot.
