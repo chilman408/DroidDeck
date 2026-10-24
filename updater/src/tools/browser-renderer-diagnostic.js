@@ -4,11 +4,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const https = require('node:https');
+const path = require('node:path');
 const { chromium } = require('../runtime/preview-gateway/node_modules/playwright-core');
 const { PNG } = require('../runtime/waydroid-display/node_modules/pngjs');
 
 async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
-  assert.ok(['webcodecs', 'legacy', 'saved-webcodecs'].includes(mode));
+  assert.ok(['webcodecs', 'legacy', 'saved-webcodecs', 'webcodecs-test', 'webcodecs-unsupported'].includes(mode));
   const certificate = new crypto.X509Certificate(fs.readFileSync(certPath));
   assert.equal(certificate.checkIP(new URL(origin).hostname), new URL(origin).hostname);
   const pin = crypto.createHash('sha256').update(certificate.publicKey.export({ type: 'spki', format: 'der' })).digest('base64');
@@ -18,9 +19,15 @@ async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
     if (policyPath) {
-      const policy = fs.readFileSync(policyPath);
+      const policies = {
+        '/js/display/display-renderer-manager.js': policyPath,
+        '/js/settings/settings-controller.js': path.join(path.dirname(policyPath), 'browser-settings-policy.js'),
+        '/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js': path.join(path.dirname(policyPath), 'webcodecs-worker-policy.js'),
+      };
+      for (const [asset, file] of Object.entries(policies)) {
+      const policy = fs.readFileSync(file);
       const original = await new Promise((resolve, reject) => {
-        https.get(origin + '/js/display/display-renderer-manager.js', { ca: fs.readFileSync(certPath) }, response => {
+        https.get(origin + asset, { ca: fs.readFileSync(certPath) }, response => {
           if (response.statusCode !== 200) { response.resume(); reject(new Error('Renderer asset unavailable')); return; }
           const chunks = []; let size = 0;
           response.on('data', chunk => {
@@ -32,10 +39,13 @@ async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
           response.on('end', () => resolve(Buffer.concat(chunks)));
         }).on('error', reject);
       });
-      await page.route(origin + '/js/display/display-renderer-manager.js', async route => {
-        await route.fulfill({ status: 200, body: Buffer.concat([original, Buffer.from('\n;\n'), policy]),
+      const failure = mode === 'webcodecs-unsupported' && asset.endsWith('Worker.js') ?
+        Buffer.from('\nVideoDecoder.isConfigSupported = async () => ({supported:false});\n') : Buffer.alloc(0);
+      await page.route(origin + asset, async route => {
+        await route.fulfill({ status: 200, body: Buffer.concat([original, Buffer.from('\n;\n'), policy, failure]),
           headers: { 'cache-control': 'no-store', 'content-type': 'text/javascript; charset=utf-8' } });
       });
+      }
     }
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error.name));
@@ -43,6 +53,7 @@ async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
       for (const key of ['DisplayRepository_isPrimaryDisplaySharedPreferencesKey',
         'flutter.DisplayRepository_isPrimaryDisplaySharedPreferencesKey']) localStorage.setItem(key, 'true');
       window.__decoderErrors = [];
+      window.__codecConfiguration = null;
       const NativeWorker = window.Worker;
       window.Worker = class extends NativeWorker {
         constructor(url, options) {
@@ -51,13 +62,15 @@ async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
             this.addEventListener('error', event => window.__decoderErrors.push(String(event.message).slice(0, 200)));
             this.addEventListener('message', event => {
               if (event.data?.error) window.__decoderErrors.push(String(event.data.error).slice(0, 200));
+              if (event.data?.webCodecsConfigured) window.__codecConfiguration = event.data.accelerationPreference;
             });
           }
         }
       };
     });
     if (mode === 'saved-webcodecs') await page.addInitScript(() => localStorage.setItem('TeslaAndroid_browserH264Renderer_v1', 'webcodecs'));
-    assert.equal((await page.goto(origin + (mode === 'saved-webcodecs' ? '/' : '/?video=' + mode),
+    const query = mode === 'webcodecs-unsupported' ? 'webcodecs-test' : mode;
+    assert.equal((await page.goto(origin + (mode === 'saved-webcodecs' ? '/' : '/?video=' + query),
       { waitUntil: 'domcontentloaded', timeout: 20000 })).status(), 200);
     if (await page.locator('#main-display-button').isVisible()) await page.locator('#main-display-button').click();
     let received = true;
@@ -72,6 +85,8 @@ async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
         frames: Number(canvas?.dataset.videoFrames || 0), state: canvas?.dataset.videoState,
         decoder: canvas?.dataset.videoDecoder, errors: window.__decoderErrors.slice(0, 5) };
     });
+    facts.codecConfiguration = await page.evaluate(() => window.__codecConfiguration);
+    facts.finalVideoQuery = new URL(page.url()).searchParams.get('video');
     const pixels = PNG.sync.read(await page.locator('#canvas').screenshot());
     let nonblack = 0;
     for (let i = 0; i < pixels.data.length; i += 4) if (pixels.data[i] > 8 || pixels.data[i + 1] > 8 || pixels.data[i + 2] > 8) nonblack++;
@@ -80,7 +95,10 @@ async function main([origin, certPath, mode = 'webcodecs', policyPath]) {
       certificatePinned: true, screenshotsSaved: false, mediaSaved: false }));
     if (policyPath) {
       assert.equal(received, true); assert.ok(nonblack > pixels.width * pixels.height * .01);
-      assert.equal(facts.effective, 'legacy'); assert.equal(facts.options.includes('webcodecs'), false);
+      assert.equal(facts.effective, mode === 'webcodecs-test' ? 'webcodecs' : 'legacy');
+      if (mode === 'webcodecs-test') assert.equal(facts.codecConfiguration, 'no-preference');
+      if (mode === 'webcodecs-unsupported') assert.equal(facts.finalVideoQuery, 'legacy');
+      assert.equal(facts.options.includes('webcodecs'), false);
       assert.deepEqual(pageErrors, []);
     }
   } finally { await browser.close(); }

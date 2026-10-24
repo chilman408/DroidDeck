@@ -471,11 +471,16 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     }
     if (pathname === "/") req.url = "/index.html";
     res.setHeader("Cache-Control", "no-store");
-    if (decoded === '/js/display/display-renderer-manager.js' && ['GET', 'HEAD'].includes(req.method)) {
+    const browserPolicies = {
+      '/js/display/display-renderer-manager.js': 'browser-renderer-policy.js',
+      '/js/settings/settings-controller.js': 'browser-settings-policy.js',
+      '/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js': 'webcodecs-worker-policy.js',
+    };
+    if (Object.hasOwn(browserPolicies, decoded) && ['GET', 'HEAD'].includes(req.method)) {
       // Keep protected frontend files/receipts unchanged; this policy rolls back
       // atomically with the gateway update. It never changes Android settings.
-      const original = fs.readFileSync(path.join(frontendDir, 'js/display/display-renderer-manager.js'));
-      const policy = fs.readFileSync(path.join(__dirname, 'browser-renderer-policy.js'));
+      const original = fs.readFileSync(path.join(frontendDir, decoded.slice(1)));
+      const policy = fs.readFileSync(path.join(__dirname, browserPolicies[decoded]));
       const body = Buffer.concat([original, Buffer.from('\n;\n'), policy]);
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Content-Length', body.length);
