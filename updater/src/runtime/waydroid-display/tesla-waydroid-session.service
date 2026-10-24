@@ -1,0 +1,20 @@
+[Unit]
+Description=TeslaAndroid Waydroid desktop session
+PartOf=graphical-session.target
+Conflicts=waydroid-session-software-final.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=/opt/teslaandroid-waydroid/libgbinder
+Environment=WAYLAND_DISPLAY=wayland-0
+ExecStartPre=/usr/bin/test -S %t/wayland-0
+ExecStartPre=/usr/bin/node /opt/teslaandroid-waydroid/runtime/waydroid-display/session-preflight.js
+ExecStart=/usr/bin/waydroid show-full-ui
+Restart=always
+RestartSec=5s
+KillMode=control-group
+TimeoutStopSec=45s
+
+[Install]
+WantedBy=graphical-session.target

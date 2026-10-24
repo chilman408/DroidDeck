@@ -1,0 +1,203 @@
+diff --git a/css/app.css b/css/app.css
+index 8a1dddb..f449564 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -532,6 +532,56 @@
+       color: #f1b6b6;
+     }
+ 
++    .settings-access-form {
++      width: 100%;
++      padding: 16px 0;
++    }
++
++    .settings-access-fields {
++      margin: 0;
++      padding: 0;
++      border: 0;
++      min-width: 0;
++      width: 100%;
++      max-width: 520px;
++    }
++
++    .settings-access-label {
++      display: flex;
++      flex-direction: column;
++      gap: 8px;
++      margin-bottom: 20px;
++      font-size: 18px;
++    }
++
++    .settings-access-input {
++      box-sizing: border-box;
++      width: 100%;
++      min-width: 0;
++      padding: 12px;
++      border: 1px solid #777;
++      border-radius: 4px;
++      color: #fff;
++      background: #242424;
++      font: inherit;
++    }
++
++    .settings-access-save {
++      display: inline-flex;
++      gap: 8px;
++      align-items: center;
++      padding: 10px 18px;
++      border: 1px solid #777;
++      border-radius: 4px;
++      background: #303030;
++      color: #fff;
++      font: inherit;
++      cursor: pointer;
++    }
++
++    .settings-access-save:disabled { opacity: 0.6; cursor: default; }
++    .settings-access-status { margin-top: 12px; min-height: 24px; overflow-wrap: anywhere; }
++
+     .settings-tile {
+       display: grid;
+       grid-template-columns: 34px 1fr minmax(190px, auto);
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index 9882c8a..da8273d 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -13,6 +13,25 @@
+       return this._fetchJson(this.apiBaseUrl + "/configuration");
+     }
+ 
++    fetchBrowserAccess() {
++      return this._fetchJson(this.apiBaseUrl + "/browserAccess");
++    }
++
++    async saveBrowserAccess(payload, csrfToken, authorization) {
++      const response = await fetch(this.apiBaseUrl + "/browserAccess", {
++        method: "POST", cache: "no-store", credentials: "same-origin",
++        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken,
++          ...(authorization ? { Authorization: authorization } : {}) },
++        body: JSON.stringify(payload),
++      });
++      if (!response.ok) {
++        if (response.status === 401) throw new Error("Current password is incorrect");
++        const body = await response.json().catch(() => ({}));
++        throw new Error(body.error || "Could not save browser access settings");
++      }
++      return response.json();
++    }
++
+     fetchDisplayState() {
+       return this._fetchJson(this.apiBaseUrl + "/displayState");
+     }
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index a7664cf..8d85ae3 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -26,6 +26,7 @@
+         { id: "network", title: "Network", icon: "wifi" },
+         { id: "audio", title: "Audio", icon: "speaker" },
+         { id: "gps", title: "GPS", icon: "gps_fixed" },
++        { id: "browserAccess", title: "Browser access", icon: "lock" },
+         { id: "device", title: "Device", icon: "developer_board" },
+       ];
+ 
+@@ -79,6 +80,99 @@
+       if (this.activeSectionId === "device") {
+         await this._renderDeviceSection(token);
+       }
++      if (this.activeSectionId === "browserAccess") {
++        await this._renderBrowserAccessSection(token);
++      }
++    }
++
++    async _renderBrowserAccessSection(token) {
++      this._appendLoadingState();
++      let state;
++      try { state = await this.apiClient.fetchBrowserAccess(); }
++      catch (_error) { this._renderErrorState("Browser access settings unavailable"); return; }
++      if (token !== this._renderToken || this.activeSectionId !== "browserAccess") return;
++      this.content.innerHTML = "";
++      const form = utils.createElement("form", "settings-access-form", null);
++      form.id = "browser-access-form";
++      const newFields = utils.createElement("fieldset", "settings-access-fields", null);
++      const currentFields = utils.createElement("fieldset", "settings-access-fields", null);
++      const field = (parent, id, title, type, autocomplete) => {
++        const label = utils.createElement("label", "settings-access-label", title);
++        label.htmlFor = id;
++        const input = utils.createElement("input", "settings-access-input", null);
++        input.id = id; input.type = type; input.autocomplete = autocomplete;
++        input.maxLength = type === "password" ? 256 : 64;
++        label.appendChild(input); parent.appendChild(label);
++        return input;
++      };
++      const username = field(newFields, "access-username", "Username", "text", "username");
++      username.value = state.username;
++      username.pattern = "[A-Za-z0-9_.@-]{1,64}";
++      const password = field(newFields, "access-password", state.enabled ? "New password" : "Password", "password", "new-password");
++      password.minLength = 12;
++      const confirm = field(newFields, "access-confirm-password", "Confirm password", "password", "new-password");
++      let currentPassword;
++      if (state.enabled) {
++        currentPassword = field(currentFields, "access-current-password", "Current password", "password", "current-password");
++        currentPassword.required = true;
++      }
++      let required = state.enabled;
++      const synchronize = () => {
++        newFields.hidden = !required;
++        newFields.disabled = !required;
++        username.required = required;
++        password.required = required && !state.enabled;
++        confirm.required = required && !state.enabled;
++      };
++      const loginSwitch = this._createSwitch(required, async (checked) => {
++        required = checked; synchronize();
++      });
++      loginSwitch.querySelector("input").setAttribute("aria-label", "Require login");
++      this._appendTile({ icon: "lock", title: "Require login", trailing: loginSwitch });
++      const status = utils.createElement("div", "settings-access-status", "");
++      status.id = "access-status";
++      status.setAttribute("role", "status");
++      status.setAttribute("aria-live", "polite");
++      const save = utils.createElement("button", "settings-access-save", null);
++      save.type = "submit";
++      save.appendChild(utils.createElement("span", "material-symbols-rounded", "save"));
++      save.appendChild(utils.createElement("span", "", "Save"));
++      form.appendChild(currentFields);
++      form.appendChild(newFields);
++      form.appendChild(save);
++      form.appendChild(status);
++      this.content.appendChild(form);
++      synchronize();
++      form.addEventListener("submit", async (event) => {
++        event.preventDefault();
++        if (save.disabled) return;
++        const payload = { enabled: required };
++        if (required && (!state.enabled || password.value || username.value !== state.username)) {
++          if (password.value.length < 12) { status.textContent = "Password must be at least 12 characters"; return; }
++          if (password.value !== confirm.value) { status.textContent = "Passwords do not match"; return; }
++          payload.username = username.value;
++          payload.password = password.value;
++        }
++        save.disabled = true;
++        status.textContent = "Saving...";
++        try {
++          let authorization;
++          if (state.enabled) {
++            const bytes = new TextEncoder().encode(state.username + ":" + currentPassword.value);
++            authorization = "Basic " + btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
++          }
++          await this.apiClient.saveBrowserAccess(payload, state.csrfToken, authorization);
++          password.value = ""; confirm.value = "";
++          if (currentPassword) currentPassword.value = "";
++          if (required) global.location.reload();
++          else {
++            await this._renderActiveSection();
++            const saved = this.content.querySelector("#access-status");
++            if (saved) saved.textContent = "Saved";
++          }
++        } catch (error) { status.textContent = error.message || "Could not save browser access settings"; }
++        finally { save.disabled = false; }
++      });
+     }
+ 
+     async _renderDisplaySection(token) {

@@ -6,9 +6,21 @@ Android streamed to your browser from an Ubuntu virtual machine.
 
 ## Pilot Release
 
+**Already running 0.1.0-rc.2?** The signed **0.1.1-rc.5 updater** installs from
+one file and preserves your Android apps, accounts, settings and HTTPS identity.
+See [update and rollback instructions](UPDATE.md). It includes independent reboot
+recovery; later signed gateway updates use the same command without reinstalling
+Android. [Pilot releases](https://github.com/chilman408/DroidDeck/releases).
+
+RC5 preserves native GPU supervision: an idle touch stream does not disable GPU
+rendering. See the [GPU guard review and regression tests](docs/GPU-GUARD.md).
+The amended RC5 draft also removes the unreliable WebCodecs renderer choice and
+recovers old selections to legacy H264. See [browser compatibility](docs/BROWSER-RENDERER.md).
+
 **0.1.0-rc.2 is an early technical pilot with the reboot fix integrated.**
 New installations use one source installer and one installation command. No
-separate hotfix is needed. This is not a prebuilt VM or a general in-place updater.
+separate hotfix is needed. Use the RC2 clean installer below for a new VM;
+the signed gateway updater above is for an existing RC2 installation.
 
 Already running rc.1? Keep your apps and login data and use
 [its dedicated hotfix](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1-hotfix.1).

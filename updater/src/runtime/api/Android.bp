@@ -1,0 +1,13 @@
+cc_binary {
+    name: "tesla-android-x86-api",
+    vendor: true,
+    srcs: ["tesla-android-x86-api.cpp"],
+    include_dirs: ["external/tesla-android-configuration-manager"],
+    cflags: [
+        "-DCPPHTTPLIB_NO_EXCEPTIONS",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-std=c++17",
+    ],
+}

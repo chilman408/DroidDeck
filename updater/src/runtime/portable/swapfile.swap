@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-only
+[Unit]
+Description=DroidDeck host swap reserve
+Documentation=man:systemd.swap(5)
+
+[Swap]
+What=/swapfile
+
+[Install]
+WantedBy=swap.target

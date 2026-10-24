@@ -1,0 +1,21 @@
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index 3966380..9561b59 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -124,14 +124,8 @@
+     }
+ 
+     fetchLatestRelease() {
+-      return this._fetchJson(
+-        this.githubApiBaseUrl + "/repos/tesla-android/android-raspberry-pi/releases/latest",
+-        {
+-          headers: {
+-            "X-GitHub-Api-Version": "2022-11-28",
+-          },
+-        },
+-      );
++      // No VM project release channel is published yet. Pi releases are not VM updates.
++      return Promise.resolve(null);
+     }
+ 
+     setSoftApBand(value) {

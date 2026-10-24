@@ -1,0 +1,215 @@
+diff --git a/js/audio/audioplayback.js b/js/audio/audioplayback.js
+index 6516cc1..db09043 100644
+--- a/js/audio/audioplayback.js
++++ b/js/audio/audioplayback.js
+@@ -28,7 +28,6 @@
+   let recovering = false;
+ 
+   let audioCtx = null;
+-  let audioGain = null;
+   let mediaUrl = null;
+   let recoveryTimer = null;
+ 
+@@ -39,9 +38,8 @@
+     if (!isAudioEnabled) window.stopAudioPlayback();
+   };
+   window.setAudioVolume = function(volume) {
+-    audioVolume = Number.isFinite(Number(volume)) ? Math.max(0, Math.min(1.5, Number(volume))) : 1;
+-    if (audioGain) audioGain.gain.value = audioVolume;
+-    if (audioEl) audioEl.volume = audioGain ? 1 : Math.min(1, audioVolume);
++    audioVolume = Number.isFinite(Number(volume)) ? Math.max(0, Math.min(1, Number(volume))) : 1;
++    if (audioEl) audioEl.volume = audioVolume;
+   };
+   window.getAudioEnabled = function() { return isAudioEnabled; };
+ 
+@@ -91,10 +89,6 @@
+     const Ctx = window.AudioContext || window.webkitAudioContext;
+     if (!Ctx) return null;
+     audioCtx = new Ctx();
+-    const source = audioCtx.createMediaElementSource(ensureAudioEl());
+-    audioGain = audioCtx.createGain(); audioGain.gain.value = audioVolume;
+-    audioEl.volume = 1;
+-    source.connect(audioGain); audioGain.connect(audioCtx.destination);
+     return audioCtx;
+   }
+ 
+diff --git a/js/display/display-renderer-manager.js b/js/display/display-renderer-manager.js
+index d6540c8..fd19019 100644
+--- a/js/display/display-renderer-manager.js
++++ b/js/display/display-renderer-manager.js
+@@ -180,12 +180,15 @@
+ 
+     _rendererInfoForId(rendererId, state = {}) {
+       const canvas = document.getElementById("canvas");
+-      if (state.streamFormats && state.streamFormats.includes("h264") &&
+-          global.isSecureContext && typeof global.VideoDecoder === "function" &&
+-          canvas && typeof canvas.transferControlToOffscreen === "function" &&
+-          new URLSearchParams(global.location.search).get("video") !== "png") {
+-        return { id: 1, packetFormat: "scrcpy",
+-          scriptPath: "./js/display/renderers/h264-webcodecs/h264WebCodecs.js",
++      const videoChoice = new URLSearchParams(global.location.search).get("video");
++      if (state.streamFormats && state.streamFormats.includes("h264") && videoChoice !== "png") {
++        if (!canvas || typeof canvas.transferControlToOffscreen !== "function") {
++          throw new Error("H264 canvas rendering is unavailable in this browser");
++        }
++        const useWebCodecs = videoChoice !== "legacy" && global.isSecureContext && typeof global.VideoDecoder === "function";
++        return { id: useWebCodecs ? 1 : 2, packetFormat: "scrcpy",
++          scriptPath: useWebCodecs ? "./js/display/renderers/h264-webcodecs/h264WebCodecs.js" :
++            "./js/display/renderers/h264-broadway/h264Brodway.js",
+           binaryType: "arraybuffer" };
+       }
+       switch (utils.toInt(rendererId, 0)) {
+diff --git a/js/display/renderers/h264-broadway/h264Brodway.js b/js/display/renderers/h264-broadway/h264Brodway.js
+index c7b21dd..832da54 100644
+--- a/js/display/renderers/h264-broadway/h264Brodway.js
++++ b/js/display/renderers/h264-broadway/h264Brodway.js
+@@ -150,7 +150,15 @@ window.addEventListener("resize", function () {
+ });
+ 
+ if (worker) {
+-  worker.onmessage = function (_event) {};
++  worker.onmessage = function (event) {
++    if (event.data.frameRendered) {
++      canvas.dataset.videoFrames = String(Number(canvas.dataset.videoFrames || 0) + 1);
++      canvas.dataset.videoState = "ready";
++      canvas.dataset.videoWidth = String(event.data.width);
++      canvas.dataset.videoHeight = String(event.data.height);
++      canvas.dataset.videoDecoder = "legacy";
++    }
++  };
+ }
+ 
+ window.addEventListener("beforeunload", function () {
+@@ -159,9 +167,38 @@ window.addEventListener("beforeunload", function () {
+   }
+ });
+ 
++var legacyConfig = null;
+ function drawDisplayFrame(arrayBuffer) {
+   if (!worker) {
+     return;
+   }
+-  worker.postMessage({ h264Data: arrayBuffer });
++  if (window.TAHtmlVideoPacketFormat === "scrcpy") {
++    if (typeof arrayBuffer === "string") {
++      var metadata;
++      try { metadata = JSON.parse(arrayBuffer); } catch (_error) { return; }
++      if (metadata.type !== "scrcpy-session" || !Number.isInteger(metadata.width) ||
++          !Number.isInteger(metadata.height) || metadata.width < 96 || metadata.height < 96 ||
++          metadata.width > 1920 || metadata.height > 1920 || metadata.width % 2 || metadata.height % 2 ||
++          metadata.width * metadata.height > 1600000) return;
++      legacyConfig = null;
++      worker.postMessage({ streamReset: metadata });
++      return;
++    }
++    if (!(arrayBuffer instanceof ArrayBuffer) || arrayBuffer.byteLength < 13 || arrayBuffer.byteLength > 2097164) return;
++    var header = new DataView(arrayBuffer);
++    if (header.getUint32(8) !== arrayBuffer.byteLength - 12) return;
++    var bytes = new Uint8Array(arrayBuffer);
++    var payload = bytes.subarray(12);
++    if (bytes[0] & 0x40) {
++      if (payload.byteLength <= 262144) legacyConfig = payload.slice();
++      return;
++    }
++    if (!legacyConfig) return;
++    if (bytes[0] & 0x20) {
++      var accessUnit = new Uint8Array(legacyConfig.length + payload.length);
++      accessUnit.set(legacyConfig); accessUnit.set(payload, legacyConfig.length);
++      arrayBuffer = accessUnit.buffer;
++    } else arrayBuffer = payload.slice().buffer;
++  }
++  worker.postMessage({ h264Data: arrayBuffer }, [arrayBuffer]);
+ }
+diff --git a/js/display/renderers/h264-broadway/h264BrodwayWorker.js b/js/display/renderers/h264-broadway/h264BrodwayWorker.js
+index 353ec27..152bac1 100644
+--- a/js/display/renderers/h264-broadway/h264BrodwayWorker.js
++++ b/js/display/renderers/h264-broadway/h264BrodwayWorker.js
+@@ -47,11 +47,7 @@ function applyRuntimeConfig(config) {
+   const nextWindowWidth = toSafeNumber(runtimeConfig.windowWidth, windowWidth);
+   const nextWindowHeight = toSafeNumber(runtimeConfig.windowHeight, windowHeight);
+ 
+-  const sizeChanged =
+-    nextWidth !== width ||
+-    nextHeight !== height ||
+-    nextWindowWidth !== windowWidth ||
+-    nextWindowHeight !== windowHeight;
++  const sizeChanged = nextWidth !== width || nextHeight !== height;
+ 
+   width = nextWidth;
+   height = nextHeight;
+@@ -96,22 +92,27 @@ function drawImageToCanvas(image) {
+     return;
+   }
+ 
+-  const ySize = width * height;
+-  const uvSize = (width >> 1) * (height >> 1);
++  const data = image.data;
++  const ySize = image.width * image.height;
++  const uvSize = (image.width >> 1) * (image.height >> 1);
+ 
+-  if (image.length < ySize + uvSize * 2) {
++  if (data.length < ySize + uvSize * 2) {
+     return;
+   }
+ 
+-  const y = image.subarray(0, ySize);
+-  const u = image.subarray(ySize, ySize + uvSize);
+-  const v = image.subarray(ySize + uvSize, ySize + uvSize * 2);
++  const y = data.subarray(0, ySize);
++  const u = data.subarray(ySize, ySize + uvSize);
++  const v = data.subarray(ySize + uvSize, ySize + uvSize * 2);
+ 
+   yuvCanvas.drawNextOutputPicture({
+     yData: y,
+     uData: u,
+     vData: v,
++    yDataPerRow: image.width, yRowCnt: image.height,
++    uDataPerRow: image.width >> 1, uRowCnt: image.height >> 1,
++    vDataPerRow: image.width >> 1, vRowCnt: image.height >> 1,
+   });
++  self.postMessage({ frameRendered: true, width, height });
+ }
+ 
+ function splitNalUnits(data) {
+@@ -231,6 +232,20 @@ function handleEncodedData(data) {
+   decoder.decode(data);
+ }
+ 
++function resetDecoder() {
++  pendingFrames = [];
++  dropDeltaUntilKeyframe = true;
++  decoder = new Decoder({ rgb: false });
++  decoder.onPictureDecoded = function (data, decodedWidth, decodedHeight) {
++    if (!Number.isInteger(decodedWidth) || !Number.isInteger(decodedHeight) ||
++        decodedWidth < width || decodedHeight < height || decodedWidth > 2048 || decodedHeight > 2048) return;
++    // Decoder memory is reused; retain independent pixels until the render task.
++    pendingFrames.push({ data: data.slice(), width: decodedWidth, height: decodedHeight });
++    if (pendingFrames.length > MAX_RENDER_QUEUE_SIZE + 1) pendingFrames.splice(0, pendingFrames.length - 1);
++    scheduleRender();
++  };
++}
++
+ self.onmessage = function (event) {
+   if (
+     event.data.canvas &&
+@@ -246,16 +261,10 @@ self.onmessage = function (event) {
+     });
+     rebuildYuvCanvas();
+ 
+-    decoder = new Decoder({ rgb: false });
+-    decoder.onPictureDecoded = function (data) {
+-      pendingFrames.push(data);
+-      if (pendingFrames.length > MAX_RENDER_QUEUE_SIZE + 1) {
+-        while (pendingFrames.length > 1) {
+-          pendingFrames.shift();
+-        }
+-      }
+-      scheduleRender();
+-    };
++    resetDecoder();
++  } else if (event.data.streamReset) {
++    applyRuntimeConfig({ displayWidth: event.data.streamReset.width, displayHeight: event.data.streamReset.height });
++    resetDecoder();
+   } else if (event.data.config) {
+     applyRuntimeConfig(event.data.config);
+   } else if (event.data.h264Data) {

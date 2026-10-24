@@ -1,0 +1,16 @@
+[Unit]
+Description=DroidDeck disposable GPU boot readiness
+Requires=droiddeck-gpu-recovery.service tesla-waydroid-headless-session.service
+After=droiddeck-gpu-recovery.service tesla-waydroid-headless-session.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 -B /opt/droiddeck/gpu-boot-20261015bq/gpu-boot.py --verify
+TimeoutStartSec=210s
+RemainAfterExit=yes
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

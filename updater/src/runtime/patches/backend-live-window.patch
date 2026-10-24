@@ -1,0 +1,78 @@
+diff --git a/runtime/preview-gateway/h264-relay.js b/runtime/preview-gateway/h264-relay.js
+index 266fefe..937687a 100644
+--- a/runtime/preview-gateway/h264-relay.js
++++ b/runtime/preview-gateway/h264-relay.js
+@@ -7,2 +7,5 @@ const { loadWorkerConfiguration } = require('../portable/worker-config');
+ const SOCKET = "\0scrcpy_54410001";
++const FLOW_PROTOCOL = 'droiddeck-live-v1';
++const FLOW_WINDOW = 4, FLOW_BYTES = 512 * 1024;
++const FLOW_PENDING_BYTES = 2 * 1024 * 1024 + 256 * 1024 + 12;
+ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), reconnectMs = 500 } = {}) {
+@@ -17,2 +20,26 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
+   }
++  function drainFlow(client) {
++    while (client.readyState === WebSocket.OPEN && client.pending.length && client.inflight.size < FLOW_WINDOW) {
++      const payload = client.pending[0];
++      if (client.inflight.size && client.inflightBytes + payload.length > FLOW_BYTES) return;
++      client.pending.shift(); client.pendingBytes -= payload.length;
++      if (payload === config) client.flowConfig = config;
++      const id = ++client.flowSerial;
++      client.inflight.set(id, payload.length); client.inflightBytes += payload.length;
++      send(client, JSON.stringify({ type: 'scrcpy-flow-frame', id }));
++      send(client, payload);
++    }
++  }
++  function clearFlow(client) { client.pending = []; client.pendingBytes = 0; }
++  function queueFlow(client, packet, key = false) {
++    if (key) {
++      // Unsent old references can be replaced only by a complete new GOP.
++      clearFlow(client); client.waitingKey = false;
++      if (client.flowConfig !== config) { client.pending.push(config); client.pendingBytes = config.length; }
++    } else if (client.waitingKey) return;
++    if (client.pending.length >= 121 || client.pendingBytes + packet.length > FLOW_PENDING_BYTES) {
++      clearFlow(client); client.waitingKey = true; return;
++    }
++    client.pending.push(packet); client.pendingBytes += packet.length; drainFlow(client);
++  }
+   function receive(event) {
+@@ -20,3 +47,3 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
+       session = JSON.stringify({ type: "scrcpy-session", width: event.width, height: event.height }); config = null; clearReplay();
+-      for (const client of ws.clients) { client.waitingKey = true; send(client, session); }
++      for (const client of ws.clients) { client.waitingKey = true; if (client.flow) { clearFlow(client); client.flowConfig = null; } send(client, session); }
+     } else if (event.config) {
+@@ -24,3 +51,3 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
+       config = event.packet; clearReplay();
+-      for (const client of ws.clients) client.waitingKey = true;
++      for (const client of ws.clients) { client.waitingKey = true; if (client.flow) clearFlow(client); }
+     } else {
+@@ -33,2 +60,3 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
+       for (const client of ws.clients) {
++        if (client.flow) { if (config) queueFlow(client, event.packet, event.key); continue; }
+         if (client.waitingKey) {
+@@ -57,9 +85,23 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
+     client.waitingKey = true;
++    client.flow = client.protocol === FLOW_PROTOCOL;
++    if (client.flow) { clearFlow(client); client.inflight = new Map(); client.inflightBytes = 0; client.flowSerial = 0; client.flowConfig = null; }
+     if (session) send(client, session);
+     if (config && replay.length) {
+-      send(client, config);
+-      for (const packet of replay) send(client, packet);
++      if (client.flow) {
++        client.pending = [config, ...replay]; client.pendingBytes = config.length + replayBytes;
++        drainFlow(client);
++      } else {
++        send(client, config);
++        for (const packet of replay) send(client, packet);
++      }
+       client.waitingKey = false;
+     }
+-    client.on("message", () => client.close(1008, "Video is read-only"));
++    client.on("message", (bytes, binary) => {
++      let ack;
++      try { if (!binary && client.flow) ack = JSON.parse(bytes.toString()); } catch {}
++      if (!ack || Object.keys(ack).sort().join(',') !== 'id,type' || ack.type !== 'scrcpy-flow-ack' ||
++          !Number.isSafeInteger(ack.id) || ack.id <= 0) { client.close(1008, "Video is read-only"); return; }
++      if (!client.inflight.has(ack.id)) return;
++      client.inflightBytes -= client.inflight.get(ack.id); client.inflight.delete(ack.id); drainFlow(client);
++    });
+     client.on("error", () => {});
