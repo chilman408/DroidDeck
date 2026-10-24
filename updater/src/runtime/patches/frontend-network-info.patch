@@ -1,0 +1,93 @@
+diff --git a/css/app.css b/css/app.css
+index c6ade88..efefdb7 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -595,17 +595,21 @@
+       grid-template-columns: 34px 1fr minmax(340px, auto);
+     }
+ 
+-    [data-vm-device-info] .settings-tile-wide {
++    [data-vm-device-info] .settings-tile-wide,
++    [data-vm-network-info] .settings-tile-wide {
+       grid-template-columns: 34px minmax(120px, 1fr) minmax(0, 1.4fr);
+     }
+ 
+     [data-vm-device-info] .settings-tile-content,
+-    [data-vm-device-info] .settings-tile-trailing {
++    [data-vm-device-info] .settings-tile-trailing,
++    [data-vm-network-info] .settings-tile-content,
++    [data-vm-network-info] .settings-tile-trailing {
+       min-width: 0;
+       overflow-wrap: anywhere;
+     }
+ 
+-    [data-vm-device-info] .settings-trailing-text {
++    [data-vm-device-info] .settings-trailing-text,
++    [data-vm-network-info] .settings-trailing-text {
+       max-width: 100%;
+       white-space: normal;
+       overflow: visible;
+@@ -956,6 +960,21 @@
+       display: none !important;
+     }
+ 
++    @media (max-width: 480px) {
++      [data-vm-network-info] .settings-tile-wide {
++        grid-template-columns: 34px minmax(0, 1fr);
++        row-gap: 4px;
++      }
++      [data-vm-network-info] .settings-tile-leading { grid-row: 1 / span 2; }
++      [data-vm-network-info] .settings-tile-content { grid-column: 2; grid-row: 1; }
++      [data-vm-network-info] .settings-tile-trailing {
++        grid-column: 2;
++        grid-row: 2;
++        justify-content: flex-start;
++        text-align: left;
++      }
++    }
++
+     @media (max-width: 1100px) {
+       :root {
+         --settings-sidebar-width: 250px;
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 96935e9..7ef43f7 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -60,6 +60,7 @@
+       this.content.innerHTML = "";
+ 
+       if (this.content.dataset) delete this.content.dataset.vmDeviceInfo;
++      if (this.content.dataset) delete this.content.dataset.vmNetworkInfo;
+ 
+       if (this.activeSectionId === "display") {
+         await this._renderDisplaySection(token);
+@@ -471,6 +472,29 @@
+         }
+       }
+ 
++      if (this.displayController.remoteDisplayState?.displayControlSupported === 1) {
++        let info;
++        try { info = await this.apiClient.fetchDeviceInfo(); }
++        catch (_error) {
++          if (token === this._renderToken && this.activeSectionId === "network") this._renderErrorState("Network details unavailable");
++          return;
++        }
++        if (token !== this._renderToken || this.activeSectionId !== "network") return;
++        if (info.networkInfoVersion !== 1) { this._renderErrorState("Network details unavailable"); return; }
++        this.content.innerHTML = ""; this.content.dataset.vmNetworkInfo = "1";
++        this.networkPendingConfig = null;
++        const rows = [["public", "Browser connection", global.location.origin],
++          ["lan", "LAN streaming", info.lan_stream_origin || "Unavailable"],
++          ["route", "Android network", info.network_mode || "Unavailable"]];
++        for (const address of info.android_addresses || []) rows.push(["lan", "Android IPv4 (" + address.interface + ")", address.address]);
++        if (!info.android_addresses?.length) rows.push(["lan", "Android IPv4", "Unavailable"]);
++        rows.push(["wifi", "Wi-Fi hotspot", "Unavailable"], ["cloud_off", "Offline routing", "Unavailable"],
++          ["sync", "Telemetry proxy", "Unavailable"], ["download", "Firmware proxy", "Unavailable"]);
++        for (const [icon, title, value] of rows) this._appendTile({ icon, title, trailing: this._createTrailingText(value), dense: false });
++        this._refreshNetworkBanner();
++        return;
++      }
++
+       if (!this.networkPendingConfig) {
+         this.networkPendingConfig = this._networkPendingFromSystemConfig(this.systemConfigCache);
+       }

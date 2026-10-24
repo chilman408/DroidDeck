@@ -1,0 +1,12 @@
+cc_binary {
+    name: "tesla-android-x86-touch",
+    vendor: true,
+    srcs: [
+        "tesla-android-x86-touch.c",
+        "touch_protocol.c",
+        "touch_mapping.c",
+        "touch_keepalive.c",
+    ],
+    shared_libs: ["libws"],
+    cflags: ["-D_GNU_SOURCE", "-Wall", "-Wextra", "-Werror", "-std=c11"],
+}

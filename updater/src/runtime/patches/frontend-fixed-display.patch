@@ -1,0 +1,30 @@
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -131,6 +131,18 @@
+ 
+       this.remoteDisplayState = remoteDisplayState;
+ 
++      if (remoteDisplayState.fixedDisplay === 1) {
++        this._setNormalState({
++          viewSize,
++          adjustedSize: {
++            width: remoteDisplayState.width,
++            height: remoteDisplayState.height,
++          },
++          remoteDisplayState,
++        });
++        return;
++      }
++
+       const isRearDisplayEnabled = remoteDisplayState.isRearDisplayEnabled === 1;
+       const isRearDisplayPrioritised = remoteDisplayState.isRearDisplayPrioritised === 1;
+       const isPrimaryDisplay = isRearDisplayEnabled
+@@ -459,6 +471,7 @@
+         quality: utils.toInt(raw.quality, 90),
+         isRearDisplayEnabled: utils.toInt(raw.isRearDisplayEnabled, 0),
+         isRearDisplayPrioritised: utils.toInt(raw.isRearDisplayPrioritised, 0),
++        fixedDisplay: utils.toInt(raw.fixedDisplay, 0),
+       };
+     }
+ 

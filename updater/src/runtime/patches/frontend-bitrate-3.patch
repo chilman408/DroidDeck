@@ -1,0 +1,13 @@
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 7801a90..cafa522 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -233,7 +233,7 @@
+               this.displaySettingsError = error.status === 409 ? "Video settings changed; try again" : "Video settings could not be saved";
+             } finally { this.videoSettingsPending = false; }
+           };
+-          const bitrate = this._createSelect([1, 2, 4, 8, 12].map(value => ({ value: value * 1000000, label: value + " Mbps" })),
++          const bitrate = this._createSelect([1, 2, 3, 4, 8, 12].map(value => ({ value: value * 1000000, label: value + " Mbps" })),
+             config.videoTargets.bitRate, value => change("bitRate", value));
+           bitrate.dataset.videoBitrate = "1";
+           const rate = this._createSelect([30, 45, 60].map(value => ({ value, label: value + " fps" })),

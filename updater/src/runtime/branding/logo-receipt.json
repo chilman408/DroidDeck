@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "product": "DroidDeck",
+  "kind": "browser-cast-logo",
+  "file": "droiddeck-logo.png",
+  "sha256": "ea8e12af127eba9bc533d805770e06e3da9f7a0f277f36a2eac574c363fdeb29",
+  "width": 1254,
+  "height": 1254,
+  "transparent": true
+}

@@ -1,0 +1,92 @@
+diff --git a/css/app.css b/css/app.css
+index f449564..d8c1192 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -595,6 +595,24 @@
+       grid-template-columns: 34px 1fr minmax(340px, auto);
+     }
+ 
++    [data-vm-device-info] .settings-tile-wide {
++      grid-template-columns: 34px minmax(120px, 1fr) minmax(0, 1.4fr);
++    }
++
++    [data-vm-device-info] .settings-tile-content,
++    [data-vm-device-info] .settings-tile-trailing {
++      min-width: 0;
++      overflow-wrap: anywhere;
++    }
++
++    [data-vm-device-info] .settings-trailing-text {
++      max-width: 100%;
++      white-space: normal;
++      overflow: visible;
++      text-overflow: clip;
++      overflow-wrap: anywhere;
++    }
++
+     .settings-tile-leading {
+       width: 30px;
+       text-align: center;
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 055d279..e801cbb 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -57,6 +57,8 @@
+       this._setActiveDropdown(null);
+       this.content.innerHTML = "";
+ 
++      if (this.content.dataset) delete this.content.dataset.vmDeviceInfo;
++
+       if (this.activeSectionId === "display") {
+         await this._renderDisplaySection(token);
+         return;
+@@ -632,6 +634,12 @@
+         return;
+       }
+ 
++      if (deviceInfo.deviceInfoVersion === 1) {
++        this.content.innerHTML = "";
++        this._renderVmDeviceInfo(deviceInfo);
++        return;
++      }
++
+       const deviceModel = utils.mapDeviceModelName(deviceInfo.device_model);
+ 
+       this.content.innerHTML = "";
+@@ -688,6 +696,36 @@
+       );
+     }
+ 
++    _renderVmDeviceInfo(info) {
++      if (this.content.dataset) this.content.dataset.vmDeviceInfo = "1";
++      const number = value => Number.isFinite(value) && value >= 0;
++      const memory = value => number(value) ? (value / (1024 ** 3)).toFixed(1) + " GiB" : "Unavailable";
++      const value = input => input === null || input === undefined || input === "" ? "Unavailable" : String(input);
++      let uptime = "Unavailable";
++      if (number(info.uptime_seconds)) {
++        const minutes = Math.floor(info.uptime_seconds / 60), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
++        uptime = (days ? days + "d " : "") + (hours ? hours % 24 + "h " : "") + minutes % 60 + "m";
++      }
++      const rows = [
++        ["perm_device_info", "Model", value(info.device_model)],
++        ["developer_board", "VM CPU", value(info.cpu_model)],
++        ["memory", "CPU cores", value(info.cpu_cores)],
++        ["memory", "VM memory", memory(info.memory_total_bytes)],
++        ["memory", "Free VM memory", memory(info.memory_free_bytes)],
++        ["schedule", "Host uptime", uptime],
++        ["terminal", "Host kernel", value(info.kernel_release)],
++        ["computer", "Host name", value(info.host_name)],
++        ["device_thermostat", "CPU Temperature", number(info.cpu_temperature) ? info.cpu_temperature + "\u00B0C" : "Unavailable"],
++        ["developer_board", "Serial Number", value(info.serial_number)],
++        ["broadcast_on_home", "CarPlay Module", "Unavailable"],
++        ["cell_tower", "LTE Modem", "Unavailable"],
++        ["update", "Release type", value(info.release_type).toUpperCase()],
++      ];
++      for (const [icon, title, text] of rows) {
++        this._appendTile({ icon, title, trailing: this._createTrailingText(text), dense: false });
++      }
++    }
++
+     async applyNetworkConfiguration() {
+       if (!this.systemConfigCache || !this.networkPendingConfig) {
+         return;

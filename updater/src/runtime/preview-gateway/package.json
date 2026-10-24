@@ -1,0 +1,18 @@
+{
+  "name": "teslaandroid-x86-preview-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "test": "node --test",
+    "smoke:browser": "node live-browser-smoke.js"
+  },
+  "dependencies": {
+    "http-proxy": "1.18.1",
+    "serve-handler": "6.1.7",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

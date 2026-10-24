@@ -1,0 +1,377 @@
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index bf5e5c8..2d4e7db 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -10,11 +10,15 @@
+       this.displaySession = null;
+       this.displayState = null;
+       this.browserAudioSupported = false;
++      this.browserGpsManaged = false;
++      this.browserGpsSupported = false;
+     }
+ 
+     async fetchSystemConfiguration() {
+       const configuration = await this._fetchJson(this.apiBaseUrl + "/configuration");
+       this.browserAudioSupported = configuration.browserAudioSupported === 1;
++      this.browserGpsManaged = configuration.browserGpsMock === 1;
++      this.browserGpsSupported = configuration.browserGpsSupported === 1;
+       return configuration;
+     }
+ 
+@@ -60,6 +64,13 @@
+       return parsed.toString();
+     }
+ 
++    gpsSocketUrl(url) {
++      if (!this.displaySession) throw new Error("GPS display session required");
++      const parsed = new URL(this.socketUrl(url));
++      parsed.searchParams.set("csrf", this.displaySession.csrfToken);
++      return parsed.toString();
++    }
++
+     async fetchDisplayState() {
+       this.displayState = await this._fetchJson(this.apiBaseUrl + "/displayState", {
+         headers: this.displaySession ? { "X-Display-Session": this.displaySession.token } : {} });
+@@ -143,6 +154,12 @@
+     }
+ 
+     setGpsState(value) {
++      if (this.browserGpsManaged) {
++        if (!this.displaySession) throw new Error("GPS display session required");
++        return this._fetch(this.apiBaseUrl + "/gpsState", { method: "POST", body: String(value), headers: {
++          "Content-Type": "text/plain", "X-Display-Session": this.displaySession.token,
++          "X-Display-CSRF": this.displaySession.csrfToken } });
++      }
+       return this._postPlain(this.apiBaseUrl + "/gpsState", value);
+     }
+ 
+diff --git a/js/core/app.js b/js/core/app.js
+index 6a1e356..67e852c 100644
+--- a/js/core/app.js
++++ b/js/core/app.js
+@@ -189,6 +189,10 @@
+ 
+     const gpsController = new TAHtml.GpsController({
+       socketUrl: flavor.gpsWebSocket,
++      apiClient,
++      canControl: () => displayController.remoteDisplayState?.canControl === true &&
++        displayController.remoteDisplayState.transactionStatus === "idle" && !displayController.isPaused &&
++        !displayController.controlRequestInFlight,
+       isEnabled:
+         systemConfiguration
+           ? TAHtml.utils.toInt(systemConfiguration["persist.tesla-android.gps.is_active"], 1) === 1
+@@ -210,8 +214,10 @@
+       if (state.canControl && state.transactionStatus === "idle" && !displayController.isPaused) touchscreenController._connectSocket();
+       else touchscreenController._closeSocket();
+       settingsController.refreshDisplayControl(state);
++      gpsController.refreshAuthority();
+     };
+     global.addEventListener("pagehide", () => touchscreenController._closeSocket());
++    global.addEventListener("pagehide", () => gpsController._stop());
+     displayController.setResizeSessionRefreshHandler(() => {
+       touchscreenController.restartSocket();
+     });
+diff --git a/js/gps/gps-controller.js b/js/gps/gps-controller.js
+index 4f8fa33..cae77a6 100644
+--- a/js/gps/gps-controller.js
++++ b/js/gps/gps-controller.js
+@@ -1,150 +1,124 @@
+ (function (global) {
+   "use strict";
+-
+   const TAHtml = global.TAHtml;
+-
+   class GpsController {
+     constructor(options) {
+       this.socketUrl = options.socketUrl;
+       this.isEnabled = Boolean(options.isEnabled);
+-
++      this.apiClient = options.apiClient;
++      this.canControl = options.canControl || (() => true);
+       this.gpsSocket = null;
+       this.gpsRunning = false;
+       this.gpsUpdateIntervalId = null;
+-      this._hasRequestedPermission = false;
++      this.retryTimer = null;
++      this.pendingPosition = null;
++      this.epoch = 0;
++      this.permissionBlocked = false;
+     }
+-
+-    initialize() {
+-      if (!this.isEnabled) {
+-        return;
+-      }
+-      this._connectSocket();
++    get managed() { return this.apiClient?.browserGpsManaged === true; }
++    _available() {
++      if (!this.isEnabled || this.permissionBlocked) return false;
++      if (!this.managed) return true;
++      try { return this.apiClient.browserGpsSupported && Boolean(this.apiClient.displaySession) && this.canControl() === true; }
++      catch (_error) { return false; }
+     }
+-
+-    setEnabled(enabled) {
+-      const nextEnabled = Boolean(enabled);
+-      if (nextEnabled === this.isEnabled) {
+-        return;
+-      }
+-      this.isEnabled = nextEnabled;
+-      if (nextEnabled) {
+-        this._connectSocket();
+-      } else {
+-        this._stop();
+-      }
++    initialize() { this.refreshAuthority(); }
++    setEnabled(value) {
++      const enabled = Boolean(value);
++      if (enabled && !this.isEnabled) this.permissionBlocked = false;
++      this.isEnabled = enabled;
++      this.refreshAuthority();
++    }
++    refreshAuthority() {
++      if (!this._available()) { this._stop(); return; }
++      let url;
++      try { url = this.managed ? this.apiClient.gpsSocketUrl(this.socketUrl) : this.socketUrl; }
++      catch (_error) { this._stop(); return; }
++      if (this.gpsSocket && this.connectedUrl !== url) this._stop();
++      if (!this.gpsSocket && this.retryTimer === null) this._connectSocket(url);
+     }
+-
+-    _connectSocket() {
+-      if (this.gpsSocket || !this.isEnabled) {
+-        return;
+-      }
+-
+-      const socket = new ReconnectingWebSocket(this.socketUrl);
+-
++    _connectSocket(url) {
++      if (this.gpsSocket || !this._available()) return;
++      const socket = this.managed ? new global.WebSocket(url) : new ReconnectingWebSocket(url);
++      this.gpsSocket = socket;
++      this.connectedUrl = url;
+       socket.onopen = () => {
+-        this.gpsRunning = true;
++        if (this.gpsSocket !== socket || !this._available()) return;
++        if (!this.managed) this._startLocationUpdates();
+       };
+-      socket.onclose = () => {
+-        this.gpsRunning = false;
+-      };
+-      socket.onerror = (error) => {
+-        TAHtml.log("GPS websocket error: " + String(error));
++      socket.onmessage = event => {
++        if (this.gpsSocket !== socket || !this._available() || !this.managed) return;
++        try {
++          const status = JSON.parse(event.data);
++          if (status.version !== 1 || status.ready !== true || status.mock !== true || Object.keys(status).length !== 3) throw new Error();
++          this._startLocationUpdates();
++        } catch (_error) { socket.close(); }
+       };
+-      socket.onmessage = (event) => {
+-        TAHtml.log("GPS websocket message: " + String(event.data || ""));
++      socket.onerror = () => TAHtml.log("GPS connection unavailable.");
++      socket.onclose = () => {
++        if (this.gpsSocket !== socket) return;
++        if (!this.managed) {
++          this.gpsRunning = false; this.epoch++;
++          if (this.gpsUpdateIntervalId !== null) global.clearInterval(this.gpsUpdateIntervalId);
++          this.gpsUpdateIntervalId = null; return;
++        }
++        this._stop();
++        if (this._available()) this.retryTimer = global.setTimeout(() => {
++          this.retryTimer = null; this.refreshAuthority();
++        }, 2000);
+       };
+-
+-      this.gpsSocket = socket;
+-      void this._checkPermissionAndStartUpdates();
+     }
+-
+-    async _checkPermissionAndStartUpdates() {
+-      if (!this.isEnabled) {
+-        return;
+-      }
+-
+-      try {
+-        const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
+-
+-        if (permissionStatus.state === "granted") {
+-          this._startLocationUpdates();
+-          return;
+-        }
+-
+-        if (permissionStatus.state === "prompt") {
+-          if (this._hasRequestedPermission) {
+-            return;
+-          }
+-          this._hasRequestedPermission = true;
+-          navigator.geolocation.getCurrentPosition(
+-            () => this._startLocationUpdates(),
+-            () => TAHtml.log("Location access denied."),
+-          );
+-          return;
+-        }
+-
+-        TAHtml.log("Location access denied.");
+-      } catch (_error) {
+-        if (this._hasRequestedPermission) {
++    _startLocationUpdates() {
++      if (!this._available() || this.gpsUpdateIntervalId !== null) return;
++      this.gpsRunning = true;
++      this.gpsUpdateIntervalId = global.setInterval(() => this._requestPosition(), 1000);
++      this._requestPosition();
++    }
++    _requestPosition() {
++      if (!this._available() || !this.gpsRunning || !this.gpsSocket || this.pendingPosition) return;
++      const request = { epoch: this.epoch, socket: this.gpsSocket };
++      this.pendingPosition = request;
++      const complete = (position, error) => {
++        if (this.pendingPosition === request) this.pendingPosition = null;
++        if (request.epoch !== this.epoch || request.socket !== this.gpsSocket || !this._available()) return;
++        if (error) {
++          TAHtml.log(error.code === 1 ? "Location access denied." : "GPS fix unavailable.");
++          if (error.code === 1) { this.permissionBlocked = true; this._stop(); }
+           return;
+         }
+-        this._hasRequestedPermission = true;
+-        navigator.geolocation.getCurrentPosition(
+-          () => this._startLocationUpdates(),
+-          () => TAHtml.log("Location access denied."),
+-        );
+-      }
+-    }
+-
+-    _startLocationUpdates() {
+-      if (this.gpsUpdateIntervalId !== null || !this.isEnabled) {
+-        return;
+-      }
+-
+-      this.gpsUpdateIntervalId = global.setInterval(() => {
+-        navigator.geolocation.getCurrentPosition(
+-          (position) => this._updateLocation(position),
+-          (error) => TAHtml.log("GPS update error: " + String(error && error.message)),
+-        );
+-      }, 1000);
++        this._updateLocation(position);
++      };
++      try {
++        navigator.geolocation.getCurrentPosition(position => complete(position), error => complete(null, error),
++          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
++      } catch (_error) { complete(null, { code: 2 }); }
+     }
+-
+     _updateLocation(position) {
+-      if (!this.gpsRunning || !this.gpsSocket || !position || !position.coords) {
+-        return;
+-      }
+-      this.gpsSocket.send(this._toLocationData(position));
++      if (!this._available() || !this.gpsRunning || this.gpsSocket?.readyState !== 1 || !position?.coords) return;
++      try { this.gpsSocket.send(this._toLocationData(position)); }
++      catch (_error) { TAHtml.log("GPS fix unavailable."); }
+     }
+-
+     _stop() {
+-      this.gpsRunning = false;
+-
+-      if (this.gpsUpdateIntervalId !== null) {
+-        global.clearInterval(this.gpsUpdateIntervalId);
+-        this.gpsUpdateIntervalId = null;
+-      }
+-
+-      if (this.gpsSocket) {
+-        try {
+-          this.gpsSocket.close();
+-        } catch (_error) {
+-          // no-op
+-        }
+-        this.gpsSocket = null;
+-      }
++      this.epoch++; this.gpsRunning = false;
++      if (this.retryTimer !== null) global.clearTimeout(this.retryTimer);
++      this.retryTimer = null;
++      if (this.gpsUpdateIntervalId !== null) global.clearInterval(this.gpsUpdateIntervalId);
++      this.gpsUpdateIntervalId = null;
++      const socket = this.gpsSocket; this.gpsSocket = null;
++      if (socket && socket.readyState !== 3) { try { socket.close(); } catch (_error) { /* Already closed. */ } }
++      // getCurrentPosition cannot be cancelled; keep its slot until its callback settles.
+     }
+-
+     _toLocationData(position) {
+-      return JSON.stringify({
+-        latitude: String(position.coords.latitude),
+-        longitude: String(position.coords.longitude),
+-        speed: String(position.coords.speed),
+-        bearing: String(position.coords.heading),
+-        vertical_accuracy: String(position.coords.accuracy),
+-        timestamp: String(Date.now()),
+-      });
++      const c = position.coords;
++      const data = { latitude: c.latitude, longitude: c.longitude, vertical_accuracy: c.accuracy,
++        timestamp: position.timestamp, speed: c.speed ?? null, bearing: c.heading ?? null };
++      if (![data.latitude, data.longitude, data.vertical_accuracy, data.timestamp].every(Number.isFinite) ||
++          Math.abs(data.latitude) > 90 || Math.abs(data.longitude) > 180 || data.vertical_accuracy <= 0 ||
++          !Number.isSafeInteger(data.timestamp) || data.timestamp < Date.now() - 30000 || data.timestamp > Date.now() + 5000 ||
++          (data.speed !== null && (!Number.isFinite(data.speed) || data.speed < 0 || data.speed > 150)) ||
++          (data.bearing !== null && (!Number.isFinite(data.bearing) || data.bearing < 0 || data.bearing >= 360))) throw new Error("Invalid GPS fix");
++      return JSON.stringify(this.managed ? data : Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)])));
+     }
+   }
+-
+   TAHtml.GpsController = GpsController;
+ })(window);
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 0f0d7a9..42cf8f3 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -548,19 +548,34 @@
+         title: "GPS",
+         subtitle: "Disable if you don't use Android navigation apps",
+         trailing: this._createSwitch(isEnabled, async (checked) => {
++          if (this.gpsSettingsPending) return;
++          this.gpsSettingsPending = true;
++          if (this.apiClient.browserGpsManaged) this.refreshDisplayControl(this.displayController.remoteDisplayState);
+           try {
+             await this.apiClient.setGpsState(checked ? 1 : 0);
+             await this._handleSystemConfigurationChanged();
+-            this.gpsController.setEnabled(checked);
+-            await this._renderActiveSection();
++            if (!this.apiClient.browserGpsManaged) this.gpsController.setEnabled(checked);
+           } catch (_error) {
+             this._renderErrorState("Service error");
++            return;
++          } finally {
++            this.gpsSettingsPending = false;
+           }
++          if (this.activeSectionId === "gps") await this._renderActiveSection();
+         }),
+       });
+ 
++      if (this.apiClient.browserGpsManaged) {
++        const state = this.displayController.remoteDisplayState;
++        const allowed = !this.gpsSettingsPending && this.apiClient.browserGpsSupported && state?.canControl && state.transactionStatus === "idle" &&
++          !this.displayController.controlRequestInFlight;
++        for (const input of this.content.querySelectorAll("input, button")) input.disabled = !allowed;
++      }
++
+       this._appendDescription(
+-        "NOTE: GPS via Browser can cause crashes on Tesla Software 2024.14 or newer, the integration is disabled by default until this issue is solved by Tesla. Please be assured that your location data never leaves your car. The real-time location updates sent to your Tesla Android device are solely utilized to emulate a hardware GPS module in the Android OS.",
++        this.apiClient.browserGpsManaged
++          ? "Browser GPS uses an Android mock location provider. Some apps may not accept mock locations."
++          : "NOTE: GPS via Browser can cause crashes on Tesla Software 2024.14 or newer, the integration is disabled by default until this issue is solved by Tesla. Please be assured that your location data never leaves your car. The real-time location updates sent to your Tesla Android device are solely utilized to emulate a hardware GPS module in the Android OS.",
+       );
+     }
+ 
+@@ -753,6 +768,12 @@
+     }
+ 
+     refreshDisplayControl(state) {
++      if (this.activeSectionId === "gps" && this.apiClient.browserGpsManaged) {
++        const allowed = !this.gpsSettingsPending && this.apiClient.browserGpsSupported && state.canControl && state.transactionStatus === "idle" &&
++          !this.displayController.controlRequestInFlight;
++        for (const input of this.content.querySelectorAll("input, button")) input.disabled = !allowed;
++        return;
++      }
+       if (this.activeSectionId !== "display" || state.displayControlSupported !== 1) return;
+       const enabled = state.canControl && state.transactionStatus === "idle" &&
+         !this.displayController.controlRequestInFlight;

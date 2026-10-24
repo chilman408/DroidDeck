@@ -1,0 +1,97 @@
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index e801cbb..3d71cda 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -36,6 +36,8 @@
+ 
+       this.systemConfigCache = null;
+       this.networkPendingConfig = null;
++      this.audioSettingsPending = false;
++      this.audioSettingsError = null;
+       this._bindBannerEvents();
+       this._bindGlobalEvents();
+     }
+@@ -514,14 +516,7 @@
+         title: "Browser audio",
+         subtitle: "Disable if you intend to use Bluetooth audio",
+         trailing: this._createSwitch(isEnabled, async (checked) => {
+-          try {
+-            await this.apiClient.setBrowserAudioState(checked ? 1 : 0);
+-            await this.apiClient.setBrowserAudioVolume(100);
+-            await this._handleSystemConfigurationChanged();
+-            await this._renderActiveSection();
+-          } catch (_error) {
+-            this._renderErrorState("Service error");
+-          }
++          await this._saveAudioSettings(checked ? 1 : 0, 100);
+         }),
+       });
+       this._appendDivider();
+@@ -538,14 +533,7 @@
+         sliderValue.textContent = String(slider.value) + " %";
+       });
+       slider.addEventListener("change", async () => {
+-        try {
+-          await this.apiClient.setBrowserAudioState(1);
+-          await this.apiClient.setBrowserAudioVolume(utils.toInt(slider.value, volume));
+-          await this._handleSystemConfigurationChanged();
+-          await this._renderActiveSection();
+-        } catch (_error) {
+-          this._renderErrorState("Service error");
+-        }
++        await this._saveAudioSettings(1, utils.toInt(slider.value, volume));
+       });
+       sliderWrap.appendChild(sliderValue);
+       sliderWrap.appendChild(slider);
+@@ -557,6 +545,12 @@
+         dense: false,
+       });
+ 
++      if (this.apiClient.browserAudioSupported) this.refreshDisplayControl(this.displayController.remoteDisplayState);
++      if (this.audioSettingsError) {
++        const status = utils.createElement("div", "settings-error", this.audioSettingsError);
++        status.setAttribute("role", "status"); this.content.appendChild(status);
++      }
++
+       this._appendDescription(
+         "If you plan to use browser audio continuously in conjunction with video playback, it's essential to note that it can be bandwidth-intensive. To optimize your experience, you may want to consider pairing your car with the Tesla Android device over Bluetooth, particularly if your Tesla is equipped with MCU2.",
+       );
+@@ -565,6 +559,26 @@
+       );
+     }
+ 
++    _audioSettingsAllowed(state = this.displayController.remoteDisplayState) {
++      return !this.audioSettingsPending && (!this.apiClient.browserAudioSupported ||
++        (state?.canControl && state.transactionStatus === "idle" && !this.displayController.controlRequestInFlight));
++    }
++
++    async _saveAudioSettings(enabled, volume) {
++      if (!this._audioSettingsAllowed()) return;
++      this.audioSettingsPending = true;
++      this.audioSettingsError = null;
++      if (this.apiClient.browserAudioSupported) this.refreshDisplayControl(this.displayController.remoteDisplayState);
++      try {
++        await this.apiClient.setBrowserAudioState(enabled);
++        await this.apiClient.setBrowserAudioVolume(volume);
++        await this._handleSystemConfigurationChanged();
++      } catch (_error) {
++        this.audioSettingsError = "Audio settings could not be saved";
++      } finally { this.audioSettingsPending = false; }
++      if (this.activeSectionId === "audio") await this._renderActiveSection();
++    }
++
+     async _renderGpsSection(token) {
+       this._appendLoadingState();
+ 
+@@ -844,6 +858,11 @@
+     }
+ 
+     refreshDisplayControl(state) {
++      if (this.activeSectionId === "audio" && this.apiClient.browserAudioSupported) {
++        const allowed = this._audioSettingsAllowed(state);
++        for (const input of this.content.querySelectorAll("input, button")) input.disabled = !allowed;
++        return;
++      }
+       if (this.activeSectionId === "gps" && this.apiClient.browserGpsManaged) {
+         const allowed = !this.gpsSettingsPending && this.apiClient.browserGpsSupported && state.canControl && state.transactionStatus === "idle" &&
+           !this.displayController.controlRequestInFlight;

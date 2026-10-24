@@ -1,0 +1,25 @@
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+index a392452..584cd47 100644
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -272,12 +272,15 @@
+ 
+     async _registerStoredRole(state) {
+       if (state.rearDisplayControlSupported !== 1) return state;
+-      if (state.displayRoleClaimSupported === 1 && ['primary', 'rear'].includes(state.displayRole)) {
+-        const primary = state.displayRole === 'primary';
+-        if (this.controlledPrimaryPreference !== primary) {
+-          this.controlledPrimaryPreference = primary;
+-          try { this._storePrimaryDisplayPreference(primary); } catch (_error) { /* Accepted server role remains tab-local. */ }
++      if (state.displayRoleClaimSupported === 1) {
++        if (['primary', 'rear'].includes(state.displayRole)) {
++          const primary = state.displayRole === 'primary';
++          if (this.controlledPrimaryPreference !== primary) {
++            this.controlledPrimaryPreference = primary;
++            try { this._storePrimaryDisplayPreference(primary); } catch (_error) { /* Accepted server role remains tab-local. */ }
++          }
+         }
++        // The server assigns a role when the display connects; cached roles cannot preempt it.
+         return state;
+       }
+       // Read browser preference once; another tab cannot silently change this role.

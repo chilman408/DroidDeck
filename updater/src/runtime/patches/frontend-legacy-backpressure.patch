@@ -1,0 +1,72 @@
+diff --git a/js/display/renderers/h264-broadway/h264Brodway.js b/js/display/renderers/h264-broadway/h264Brodway.js
+--- a/js/display/renderers/h264-broadway/h264Brodway.js
++++ b/js/display/renderers/h264-broadway/h264Brodway.js
+@@ -152,5 +152,8 @@ window.addEventListener("resize", function () {
+ if (worker) {
+   worker.onmessage = function (event) {
++    if (event.data.h264Processed === true && event.data.h264Epoch === legacyEpoch) {
++      legacyInFlight.delete(event.data.h264Ticket);
++    }
+     if (event.data.frameRendered) {
+       canvas.dataset.videoFrames = String(Number(canvas.dataset.videoFrames || 0) + 1);
+       canvas.dataset.videoState = "ready";
+@@ -170,4 +173,8 @@ window.addEventListener("beforeunload", function () {
+ var legacyConfig = null;
++var legacyEpoch = 0;
++var legacyTicket = 0;
++var legacyInFlight = new Set();
++var legacyAwaitKeyframe = true;
+ function drawDisplayFrame(arrayBuffer) {
+   if (!worker) {
+     return;
+@@ -181,6 +188,10 @@ function drawDisplayFrame(arrayBuffer) {
+           metadata.width > 1920 || metadata.height > 1920 || metadata.width % 2 || metadata.height % 2 ||
+           metadata.width * metadata.height > 1600000) return;
+       legacyConfig = null;
++      legacyEpoch++;
++      legacyTicket = 0;
++      legacyInFlight.clear();
++      legacyAwaitKeyframe = true;
+       worker.postMessage({ streamReset: metadata });
+       return;
+     }
+@@ -194,11 +205,20 @@ function drawDisplayFrame(arrayBuffer) {
+       return;
+     }
+     if (!legacyConfig) return;
+-    if (bytes[0] & 0x20) {
++    var isKeyframe = Boolean(bytes[0] & 0x20);
++    // Bound the worker inbox as well as its decoded render queue.
++    if (legacyInFlight.size >= 2) { legacyAwaitKeyframe = true; return; }
++    if (legacyAwaitKeyframe && !isKeyframe) return;
++    if (isKeyframe) {
+       var accessUnit = new Uint8Array(legacyConfig.length + payload.length);
+       accessUnit.set(legacyConfig); accessUnit.set(payload, legacyConfig.length);
+       arrayBuffer = accessUnit.buffer;
++      legacyAwaitKeyframe = false;
+     } else arrayBuffer = payload.slice().buffer;
++    var ticket = ++legacyTicket;
++    legacyInFlight.add(ticket);
++    worker.postMessage({ h264Data: arrayBuffer, h264Epoch: legacyEpoch, h264Ticket: ticket }, [arrayBuffer]);
++    return;
+   }
+   worker.postMessage({ h264Data: arrayBuffer }, [arrayBuffer]);
+ }
+diff --git a/js/display/renderers/h264-broadway/h264BrodwayWorker.js b/js/display/renderers/h264-broadway/h264BrodwayWorker.js
+--- a/js/display/renderers/h264-broadway/h264BrodwayWorker.js
++++ b/js/display/renderers/h264-broadway/h264BrodwayWorker.js
+@@ -268,6 +268,13 @@ self.onmessage = function (event) {
+   } else if (event.data.config) {
+     applyRuntimeConfig(event.data.config);
+   } else if (event.data.h264Data) {
+-    handleEncodedData(new Uint8Array(event.data.h264Data));
++    try {
++      handleEncodedData(new Uint8Array(event.data.h264Data));
++    } finally {
++      if (Number.isSafeInteger(event.data.h264Epoch) && event.data.h264Epoch >= 0 &&
++          Number.isSafeInteger(event.data.h264Ticket) && event.data.h264Ticket > 0) {
++        self.postMessage({ h264Processed: true, h264Epoch: event.data.h264Epoch, h264Ticket: event.data.h264Ticket });
++      }
++    }
+   }
+ };

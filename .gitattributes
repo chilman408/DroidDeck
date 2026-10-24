@@ -1,0 +1,2 @@
+# Preserve the exact bytes authenticated by the updater's source archive.
+/updater/src/** -text

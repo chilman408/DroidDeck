@@ -1,0 +1,10 @@
+diff --git a/ws.c b/ws.c
+--- a/ws.c
++++ b/ws.c
+@@ -1680,5 +1680,5 @@ int ws_socket(struct ws_events *evs, uint16_t port, int thread_loop,
+ 
+ 	/* Prepare the sockaddr_in structure. */
+ 	server.sin_family = AF_INET;
+-	server.sin_addr.s_addr = INADDR_ANY;
++	server.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+ 	server.sin_port = htons(port);

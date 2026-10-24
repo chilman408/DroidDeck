@@ -1,0 +1,214 @@
+diff --git a/js/display/display-renderer-manager.js b/js/display/display-renderer-manager.js
+index 4075e08..315c618 100644
+--- a/js/display/display-renderer-manager.js
++++ b/js/display/display-renderer-manager.js
+@@ -59,8 +59,13 @@
+ 
+     async ensureDisplaySocket(options) {
+       const remoteDisplayState = options.remoteDisplayState;
+-      const socketUrl = options.displayWebSocket;
+-      const rendererInfo = this._rendererInfoForId(remoteDisplayState.renderer);
++      let socketUrl = options.displayWebSocket;
++      const rendererInfo = this._rendererInfoForId(remoteDisplayState.renderer, remoteDisplayState);
++      if (rendererInfo.packetFormat === "scrcpy") {
++        const videoUrl = new URL(socketUrl);
++        videoUrl.searchParams.set("format", "h264");
++        socketUrl = videoUrl.href;
++      }
+ 
+       if (this.renderer.scriptPath && this.renderer.scriptPath !== rendererInfo.scriptPath) {
+         global.location.reload();
+@@ -172,7 +177,16 @@
+       }
+     }
+ 
+-    _rendererInfoForId(rendererId) {
++    _rendererInfoForId(rendererId, state = {}) {
++      const canvas = document.getElementById("canvas");
++      if (state.streamFormats && state.streamFormats.includes("h264") &&
++          global.isSecureContext && typeof global.VideoDecoder === "function" &&
++          canvas && typeof canvas.transferControlToOffscreen === "function" &&
++          new URLSearchParams(global.location.search).get("video") !== "png") {
++        return { id: 1, packetFormat: "scrcpy",
++          scriptPath: "./js/display/renderers/h264-webcodecs/h264WebCodecs.js",
++          binaryType: "arraybuffer" };
++      }
+       switch (utils.toInt(rendererId, 0)) {
+         case 2:
+           return {
+@@ -210,6 +224,7 @@
+ 
+       global.displayWidth = this.lastDisplaySize.displayWidth;
+       global.displayHeight = this.lastDisplaySize.displayHeight;
++      global.TAHtmlVideoPacketFormat = rendererInfo.packetFormat || "annexb";
+ 
+       this.renderer.id = rendererInfo.id;
+       this.renderer.scriptPath = rendererInfo.scriptPath;
+diff --git a/js/display/renderers/h264-webcodecs/h264WebCodecs.js b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+index 7503dc8..d66bdab 100644
+--- a/js/display/renderers/h264-webcodecs/h264WebCodecs.js
++++ b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+@@ -34,6 +34,7 @@ function buildRuntimeConfig(overrides) {
+     displayHeight: toSafeNumber(config.displayHeight, resolveInitialDisplayHeight()),
+     windowWidth: toSafeNumber(config.windowWidth, viewport.width),
+     windowHeight: toSafeNumber(config.windowHeight, viewport.height),
++    packetFormat: window.TAHtmlVideoPacketFormat || "annexb",
+   };
+ }
+ 
+@@ -106,6 +107,7 @@ if (worker) {
+       displayHeight: initialRuntimeConfig.displayHeight,
+       windowWidth: initialRuntimeConfig.windowWidth,
+       windowHeight: initialRuntimeConfig.windowHeight,
++      packetFormat: initialRuntimeConfig.packetFormat,
+     },
+     [offscreenCanvas],
+   );
+@@ -129,9 +131,34 @@ window.addEventListener("resize", function () {
+   }
+ });
+ 
++var videoWatchdog = null;
++function usePngFallback(reason) {
++  if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
++  clearTimeout(videoWatchdog);
++  console.warn("H264 fallback", reason && (reason.message || reason));
++  var fallbackUrl = new URL(window.location.href);
++  fallbackUrl.searchParams.set("video", "png");
++  window.location.replace(fallbackUrl.href);
++}
++function watchVideoFrames() {
++  if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
++  clearTimeout(videoWatchdog);
++  // A verified logical resize may occupy the full 20-second transaction budget.
++  videoWatchdog = setTimeout(usePngFallback, 30000);
++}
+ if (worker) {
+-  worker.onmessage = function (_event) {};
++  worker.onmessage = function (event) {
++    if (event.data.error) { usePngFallback(event.data.error); return; }
++    if (event.data.frameRendered) {
++      canvas.dataset.videoFrames = String(Number(canvas.dataset.videoFrames || 0) + 1);
++      canvas.dataset.videoWidth = String(event.data.width);
++      canvas.dataset.videoHeight = String(event.data.height);
++      watchVideoFrames();
++    }
++  };
++  worker.onerror = usePngFallback;
+ }
++watchVideoFrames();
+ 
+ window.addEventListener("beforeunload", function () {
+   if (worker && worker.__blobUrl) {
+@@ -143,5 +170,22 @@ function drawDisplayFrame(arrayBuffer) {
+   if (!worker) {
+     return;
+   }
+-  worker.postMessage({ h264Data: arrayBuffer });
++  if (window.TAHtmlVideoPacketFormat === "scrcpy") {
++    if (typeof arrayBuffer === "string") {
++      try {
++        var metadata = JSON.parse(arrayBuffer);
++        if (metadata.type !== "scrcpy-session" ||
++            !Number.isInteger(metadata.width) || !Number.isInteger(metadata.height) ||
++            metadata.width < 96 || metadata.height < 96 ||
++            metadata.width > 1920 || metadata.height > 1920 ||
++            metadata.width % 2 || metadata.height % 2 ||
++            metadata.width * metadata.height > 1600000) throw new Error("Invalid video size");
++        worker.postMessage({ scrcpySession: metadata });
++      } catch (_error) { usePngFallback(); }
++    } else if (arrayBuffer instanceof ArrayBuffer) {
++      worker.postMessage({ scrcpyPacket: arrayBuffer }, [arrayBuffer]);
++    }
++  } else {
++    worker.postMessage({ h264Data: arrayBuffer });
++  }
+ }
+diff --git a/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js b/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js
+index a9562bb..bb3fb22 100644
+--- a/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js
++++ b/js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js
+@@ -3,6 +3,7 @@ let spsPps = null;
+ let decoder = null;
+ let gl = null;
+ let offscreenCanvas = null;
++let packetFormat = "annexb";
+ 
+ let width = 1280;
+ let height = 720;
+@@ -175,6 +176,10 @@ function drawImageToCanvas(image) {
+   gl.drawArrays(gl.TRIANGLES, 0, 6);
+   gl.bindTexture(gl.TEXTURE_2D, null);
+ 
++  if (packetFormat === "scrcpy") {
++    self.postMessage({ frameRendered: true, width: image.displayWidth, height: image.displayHeight,
++      codedWidth: image.codedWidth, codedHeight: image.codedHeight });
++  }
+   if (image.close) {
+     image.close();
+   }
+@@ -334,6 +339,40 @@ function handleEncodedData(data) {
+   }
+ }
+ 
++// scrcpy packets contain complete MediaCodec access units, not individual slices.
++function handleScrcpyPacket(data) {
++  if (!(data instanceof ArrayBuffer) || data.byteLength < 13 || data.byteLength > 2097164) return;
++  const header = new DataView(data);
++  if (header.getUint32(8) !== data.byteLength - 12) return;
++  const bytes = new Uint8Array(data);
++  const payload = bytes.subarray(12);
++  if (bytes[0] & 0x40) {
++    const units = splitNalUnits(payload);
++    const sps = units.find(unit => getNalType(unit) === 7);
++    const pps = units.find(unit => getNalType(unit) === 8);
++    if (!sps || !pps) return;
++    spsPps = appendByteArray(sps, pps);
++    configureDecoderFromSpsPps();
++    return;
++  }
++  const key = Boolean(bytes[0] & 0x20);
++  if (!decoder || decoder.state !== "configured" || !spsPps) return;
++  if (!key && (dropDeltaUntilKeyframe || isDecodeBacklogged())) {
++    dropDeltaUntilKeyframe = true;
++    return;
++  }
++  const timestamp = (header.getUint32(0) & 0x1fffffff) * 4294967296 + header.getUint32(4);
++  if (!Number.isSafeInteger(timestamp)) return;
++  try {
++    decoder.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: timestamp,
++      data: key ? appendByteArray(spsPps, payload) : payload }));
++    if (key) dropDeltaUntilKeyframe = false;
++  } catch (error) {
++    dropDeltaUntilKeyframe = true;
++    self.postMessage({ error: String(error) });
++  }
++}
++
+ function initializeGL(glContext) {
+   const vertexSource =
+     "attribute vec2 a_position;\n" +
+@@ -417,6 +456,7 @@ self.onmessage = function (event) {
+     event.data.displayHeight !== undefined
+   ) {
+     offscreenCanvas = event.data.canvas;
++    packetFormat = event.data.packetFormat || "annexb";
+     applyRuntimeConfig({
+       displayWidth: event.data.displayWidth,
+       displayHeight: event.data.displayHeight,
+@@ -454,6 +494,15 @@ self.onmessage = function (event) {
+     });
+   } else if (event.data.config) {
+     applyRuntimeConfig(event.data.config);
++  } else if (event.data.scrcpySession) {
++    closeAllPendingFrames();
++    spsPps = null;
++    dropDeltaUntilKeyframe = true;
++    if (decoder && decoder.state !== "closed") decoder.reset();
++    applyRuntimeConfig({ displayWidth: event.data.scrcpySession.width,
++      displayHeight: event.data.scrcpySession.height });
++  } else if (event.data.scrcpyPacket) {
++    handleScrcpyPacket(event.data.scrcpyPacket);
+   } else if (event.data.h264Data) {
+     handleEncodedData(event.data.h264Data);
+   }

@@ -1,0 +1,15 @@
+.env
+.env.*
+*.pem
+*.key
+*.qcow2
+*.raw
+*.vmdk
+*.vdi
+*.apk
+*.img
+*.zip
+node_modules/
+__pycache__/
+.DS_Store
+Thumbs.db

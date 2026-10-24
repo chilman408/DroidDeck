@@ -1,0 +1,76 @@
+diff --git a/js/core/api-client.js b/js/core/api-client.js
+index 2ecb491..e774816 100644
+--- a/js/core/api-client.js
++++ b/js/core/api-client.js
+@@ -111,8 +111,8 @@
+       return this._postDisplayAuthority("rearDisplayState", payload);
+     }
+ 
+-    async postDisplayRole(role) {
+-      return this._postDisplayAuthority("displayRole", { role });
++    async postDisplayRole(role, claim) {
++      return this._postDisplayAuthority("displayRole", { role, ...(claim || {}) });
+     }
+ 
+     async _postDisplayAuthority(route, payload) {
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+index b981ba6..a392452 100644
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -272,6 +272,14 @@
+ 
+     async _registerStoredRole(state) {
+       if (state.rearDisplayControlSupported !== 1) return state;
++      if (state.displayRoleClaimSupported === 1 && ['primary', 'rear'].includes(state.displayRole)) {
++        const primary = state.displayRole === 'primary';
++        if (this.controlledPrimaryPreference !== primary) {
++          this.controlledPrimaryPreference = primary;
++          try { this._storePrimaryDisplayPreference(primary); } catch (_error) { /* Accepted server role remains tab-local. */ }
++        }
++        return state;
++      }
+       // Read browser preference once; another tab cannot silently change this role.
+       if (this.controlledPrimaryPreference === undefined) {
+         try { this.controlledPrimaryPreference = this._readPrimaryDisplayPreference(); }
+@@ -299,7 +307,10 @@
+         const state = await this.apiClient.fetchDisplayState();
+         if (state.rearDisplayControlSupported !== 1 || state.transactionStatus !== "idle") throw new Error("Display role unavailable");
+         if (this.onControlStateChange) this.onControlStateChange({ ...state, canControl: false });
+-        const next = await this.apiClient.postDisplayRole(primary ? "primary" : "rear");
++        const role = primary ? 'primary' : 'rear';
++        const preferred = state.isRearDisplayEnabled === 1 && state.isRearDisplayPrioritised === 1 ? 'rear' : 'primary';
++        const claim = state.displayRoleClaimSupported === 1 && role === preferred ? { claim: true, generation: state.generation } : undefined;
++        const next = await this.apiClient.postDisplayRole(role, claim);
+         this.controlledPrimaryPreference = primary;
+         try { this._storePrimaryDisplayPreference(primary); } catch (_error) { /* This tab still retains its accepted role. */ }
+         this._adoptControlledState(next); this._hideDisplayTypeSelectionDialog();
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 9572ff4..c4f5b3c 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -406,6 +406,13 @@
+         input.addEventListener("change", () => {
+           if (input.checked) void this._changeControlledRear(config, { role });
+         });
++        input.addEventListener('click', () => {
++          const state = this.displayController.remoteDisplayState;
++          const preferred = state.isRearDisplayEnabled === 1 && state.isRearDisplayPrioritised === 1 ? 'rear' : 'primary';
++          if (input.checked && state.displayRole === role && role === preferred && !state.canControl && state.displayRoleClaimSupported === 1) {
++            void this._changeControlledRear(config, { role });
++          }
++        });
+         choice.appendChild(input); choice.appendChild(utils.createElement("span", null, label)); rolePicker.appendChild(choice);
+       }
+       const roleTile = this._appendTile({ icon: "screenshot_monitor", title: "This Display", trailing: rolePicker });
+@@ -986,7 +993,10 @@
+       if (this.activeSectionId === 'browserConnection') { this._refreshConnectionAuthority(); return; }
+       if (this.activeSectionId === "display" && state.rearDisplayControlSupported === 1) {
+         const busy = this.rearSettingsPending || this.videoSettingsPending || this.displayController.controlRequestInFlight || state.transactionStatus !== "idle";
+-        for (const input of this.content.querySelectorAll("[data-rear-role] input")) input.disabled = Boolean(busy);
++        for (const input of this.content.querySelectorAll("[data-rear-role] input")) {
++          input.disabled = Boolean(busy);
++          if (!this.rearSettingsPending) input.checked = state.displayRole === input.value;
++        }
+         for (const input of this.content.querySelectorAll("[data-rear-shared] input")) input.disabled = !this._rearSharedAllowed(state);
+       }
+       if (this.activeSectionId === "audio" && this.apiClient.browserAudioSupported) {
