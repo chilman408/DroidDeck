@@ -10,8 +10,10 @@ preview was repaired with a separate guard based on native graphics health.
 
 The released RC2 installation uses a newer native GPU guard, which the RC5 updater
 preserves. Its health probe does not query touch, audio or gateway service states.
-RC5 therefore already has the required behavior; the signed installer and source
-assets retain their previously verified bytes and signatures. RC5 is an updater
+RC5 therefore already has the required GPU guard behavior. Its later browser
+renderer amendment changes the signed installer/source assets while preserving
+these native guard sources. Current hashes are in `updater/SOURCE.json`.
+RC5 is an updater
 for completed RC2 installations, not an installer for legacy development previews.
 
 New regression tests exercise the exact RC5 source identities with unavailable

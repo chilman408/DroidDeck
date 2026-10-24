@@ -14,6 +14,8 @@ Android. [Pilot releases](https://github.com/chilman408/DroidDeck/releases).
 
 RC5 preserves native GPU supervision: an idle touch stream does not disable GPU
 rendering. See the [GPU guard review and regression tests](docs/GPU-GUARD.md).
+The amended RC5 draft also removes the unreliable WebCodecs renderer choice and
+recovers old selections to legacy H264. See [browser compatibility](docs/BROWSER-RENDERER.md).
 
 **0.1.0-rc.2 is an early technical pilot with the reboot fix integrated.**
 New installations use one source installer and one installation command. No

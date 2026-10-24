@@ -5,6 +5,12 @@ accounts, settings, Android data and existing HTTPS certificate stay in place.
 Streaming reconnects during an update. GPU rendering and the existing software
 codec4/RGBX/AAC and legacy H264 paths remain unchanged.
 
+The amended RC5 draft removes **h264 (WebCodecs)** from Settings. Automatic and
+legacy use the compatible H264 decoder; old WebCodecs selections recover without
+clearing browser data. See [browser compatibility](docs/BROWSER-RENDERER.md).
+The amended package is pending one additional configured-RC2 apply/browser check;
+keep it as a draft candidate until `release.json` records acceptance.
+
 Use this on an already working **DroidDeck 0.1.0-rc.2**, Ubuntu 26.04.1 x86_64,
 Unraid KVM/VirGL installation. For a new VM, use the separate RC2 clean installer
 first. Do not run that clean installer over an existing Android setup.

@@ -471,6 +471,17 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     }
     if (pathname === "/") req.url = "/index.html";
     res.setHeader("Cache-Control", "no-store");
+    if (decoded === '/js/display/display-renderer-manager.js' && ['GET', 'HEAD'].includes(req.method)) {
+      // Keep protected frontend files/receipts unchanged; this policy rolls back
+      // atomically with the gateway update. It never changes Android settings.
+      const original = fs.readFileSync(path.join(frontendDir, 'js/display/display-renderer-manager.js'));
+      const policy = fs.readFileSync(path.join(__dirname, 'browser-renderer-policy.js'));
+      const body = Buffer.concat([original, Buffer.from('\n;\n'), policy]);
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      res.setHeader('Content-Length', body.length);
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
     serve(req, res, { public: frontendDir, directoryListing: false, cleanUrls: false })
       .catch(() => { if (!res.headersSent) res.writeHead(500).end(); });
   };
