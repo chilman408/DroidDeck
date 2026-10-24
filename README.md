@@ -12,6 +12,9 @@ See [update and rollback instructions](UPDATE.md). It includes independent reboo
 recovery; later signed gateway updates use the same command without reinstalling
 Android. [Pilot releases](https://github.com/chilman408/DroidDeck/releases).
 
+RC5 preserves native GPU supervision: an idle touch stream does not disable GPU
+rendering. See the [GPU guard review and regression tests](docs/GPU-GUARD.md).
+
 **0.1.0-rc.2 is an early technical pilot with the reboot fix integrated.**
 New installations use one source installer and one installation command. No
 separate hotfix is needed. Use the RC2 clean installer below for a new VM;
