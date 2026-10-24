@@ -40,11 +40,16 @@ package reproduction and signature verification, and real H264 streams with old
 saved preferences and query parameters. The development-preview backport also
 passed actual desktop/mobile H264 and AAC playback without restarting Android.
 
-The amended RC5 package remains a draft candidate until the Tesla test and its
-additional configured RC2 apply/browser check complete. Desktop tests confirm
+The amended RC5 package remains a draft candidate until the Tesla-browser test
+completes. Its exact signed single-file updater was successfully applied to an
+already configured RC2 VM after the original 35-phase ownership proof. Android
+data, TLS identity and original GPU watcher were preserved. Desktop tests confirm
 visible no-preference WebCodecs on both live streams and actual one-navigation
 recovery to legacy when an unsupported configuration is injected. The Renderer row
-is absent in the actual preview UI while other display controls remain available.
+is absent in both actual updated/preview UIs while other display controls remain
+available. Actual updated-package fault injection recovered once to legacy and
+preserved other query parameters and the URL hash. Updated desktop/mobile H264
+and AAC and full native Mesa/VirGL/allocator/software-decoder checks passed.
 The previous updater-engine crash/reboot and
 rollback evidence is recorded separately; it is not a new full acceptance run of
 the amended package. See the release's `release.json` for its current status.

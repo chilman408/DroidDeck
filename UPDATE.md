@@ -9,7 +9,8 @@ The amended RC5 draft removes the **Renderer** setting. It uses legacy H264
 automatically; old WebCodecs selections recover without clearing browser data.
 An opt-in WebCodecs compatibility test uses browser-selected decoding with bounded
 legacy recovery. See [browser compatibility](docs/BROWSER-RENDERER.md).
-The amended package is pending Tesla testing and a configured-RC2 apply/browser check;
+The exact amended package passed configured-RC2 apply/browser/native-GPU checks.
+It is still pending the Tesla-browser WebCodecs test;
 keep it as a draft candidate until `release.json` records acceptance.
 
 Use this on an already working **DroidDeck 0.1.0-rc.2**, Ubuntu 26.04.1 x86_64,
