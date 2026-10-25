@@ -8,17 +8,18 @@ const policy = fs.readFileSync(path.join(__dirname, 'webcodecs-worker-policy.js'
 const settle = () => new Promise(resolve => setImmediate(resolve));
 function fixture() {
   const requests = [], configs = [], decoded = [], errors = [];
-  const context = vm.createContext({ configs, decoded, Promise,
+  const context = vm.createContext({ configs, decoded, Promise, ArrayBuffer,Uint8Array,DataView,
     VideoDecoder: { isConfigSupported: config => new Promise((resolve, reject) => requests.push({ config, resolve, reject })) },
     self: { postMessage: value => { if (value.error) errors.push(value); } } });
   vm.runInContext(`
     let decoder = { state: 'unconfigured' }, spsPps = null;
     function buildDecoderConfig() { return { codec:'avc1.42c028', hardwareAcceleration:'prefer-hardware', optimizeForLatency:true }; }
     function configureDecoderFromSpsPps() { configs.push(buildDecoderConfig(spsPps)); decoder.state='configured'; }
+    function handleScrcpyPacket(packet) { decoded.push(packet); }
     self.onmessage = event => {
       if (event.data.scrcpySession) { decoder.state='unconfigured'; spsPps=null; }
       if (event.data.configure) { spsPps=[1]; configureDecoderFromSpsPps(); }
-      if (event.data.scrcpyPacket && decoder.state==='configured') decoded.push(event.data.scrcpyPacket);
+      if (event.data.scrcpyPacket && decoder.state==='configured') handleScrcpyPacket(event.data.scrcpyPacket);
     };`, context);
   vm.runInContext(policy, context);
   return { context, requests, configs, decoded, errors, send: data => context.self.onmessage({ data }) };
@@ -32,6 +33,20 @@ test('no-preference is checked before configure, with keyframes retained until a
   f.requests[0].resolve({ supported: true }); await settle();
   assert.equal(f.configs[0].hardwareAcceleration, 'no-preference');
   assert.equal(f.decoded.length, 1); assert.deepEqual(f.errors, []);
+});
+
+test('production admission preserves one complete multi-slice keyframe while removing AUD',async()=>{
+  const f=fixture();
+  const payload=[0,0,0,1,9,240,0,0,0,1,103,66,192,31,128,0,0,1,104,128,0,0,1,101,23,0,0,0,1,101,67];
+  const input=new Uint8Array(12+payload.length);input[0]=32;input[3]=9;input[7]=71;
+  new DataView(input.buffer).setUint32(8,payload.length);input.set(payload,12);
+  f.send({configure:true});f.send({scrcpyPacket:input.buffer});await settle();
+  f.requests[0].resolve({supported:true});await settle();
+  assert.equal(f.decoded.length,1);
+  const expected=new Uint8Array(12+payload.length-6);expected.set(input.subarray(0,12));
+  expected.set(input.subarray(18),12);new DataView(expected.buffer).setUint32(8,expected.length-12);
+  assert.deepEqual(new Uint8Array(f.decoded[0]),expected);
+  assert.deepEqual(f.errors,[]);
 });
 test('unsupported or rejected configurations report a bounded legacy recovery signal', async () => {
   for (const reject of [false, true]) {

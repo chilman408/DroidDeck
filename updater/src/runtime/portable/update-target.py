@@ -26,7 +26,8 @@ def load(name):
 
 P = load('update-package')
 D = load('runtime-candidate-dependencies')
-VERSION = '0.1.1-rc.5'
+VERSION = P.document((Path(__file__).parents[1] / 'preview-gateway/release-version.json').read_bytes())['version']
+P.version(VERSION)
 PREFIX = 'droiddeck-update-source/'
 LIMIT = 32 * 1024 * 1024
 SOURCE_PREFIXES = ('runtime/', 'tools/', 'config/', 'tests/')
@@ -37,7 +38,7 @@ GATEWAY = tuple(sorted((name + '.js' for name in (
     'browser-renderer-policy browser-settings-policy webcodecs-worker-policy compositor-video-launcher device-info display-control display-helper-client gps-control gps-helper-client '
     'gps-location h264-relay rear-display-settings runtime-probe scrcpy-stream server video-capture-controller '
     'video-launcher video-settings').split()))) + ('compositor-h264.py', 'package.json', 'package-lock.json')
-GATEWAY = tuple(sorted(GATEWAY))
+GATEWAY = tuple(sorted((*GATEWAY, 'release-version.json')))
 
 
 def source_name(name):
@@ -129,6 +130,8 @@ def sources(raw):
     if (list(files) != sorted(files) or set(members) != {PREFIX + 'source-manifest.json',
             *(PREFIX + 'src/' + name for name in files)}):
         raise ValueError('Sorted closed source set required')
+    if files.get('runtime/preview-gateway/release-version.json') != P.encode({'version': manifest['version']}):
+        raise ValueError('Gateway health identity must match signed source target version')
     return manifest, files
 
 

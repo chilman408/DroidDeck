@@ -1,25 +1,17 @@
-# Update an Existing DroidDeck RC2 Installation
+# Signed pilot update: 0.1.1-rc.7
 
-This pilot adds signed gateway updates without reinstalling Android. Your apps,
-accounts, settings, Android data and existing HTTPS certificate stay in place.
-Streaming reconnects during an update. GPU rendering and the existing software
-codec4/RGBX/AAC and legacy H264 paths remain unchanged.
+For an existing working RC2 installation or an older signed gateway candidate.
+This update preserves Android apps, accounts, configuration and HTTPS identity.
+It restores the browser-local Renderer choice and includes the Tesla-tested AUD fix.
+Automatic still uses legacy. See [browser compatibility](docs/BROWSER-RENDERER.md).
 
-The amended RC5 draft removes the **Renderer** setting. It uses legacy H264
-automatically; old WebCodecs selections recover without clearing browser data.
-An opt-in WebCodecs compatibility test uses browser-selected decoding with bounded
-legacy recovery. See [browser compatibility](docs/BROWSER-RENDERER.md).
-The exact amended package passed configured-RC2 apply/browser/native-GPU checks.
-It is still pending the Tesla-browser WebCodecs test;
-keep it as a draft candidate until `release.json` records acceptance.
-
-Use this on an already working **DroidDeck 0.1.0-rc.2**, Ubuntu 26.04.1 x86_64,
-Unraid KVM/VirGL installation. For a new VM, use the separate RC2 clean installer
-first. Do not run that clean installer over an existing Android setup.
+Use Ubuntu 26.04.1 x86_64 with the accepted Unraid KVM/VirGL setup. For a new VM,
+install the separate RC2 clean installer first. Never run a clean installer over
+an existing signed-in Android setup. Require `release.json` acceptance before use.
 
 ## Download and verify
 
-Download `droiddeck-0.1.1-rc.5-update.pyz` and `SHA256SUMS` from the official
+Download `droiddeck-0.1.1-rc.7-update.pyz` and `SHA256SUMS` from the official
 [DroidDeck pilot release](https://github.com/chilman408/DroidDeck/releases).
 The `.pyz` is the complete updater: it contains the payload, public source archive,
 release statement, detached signature and installer. It needs no separate hotfix.
@@ -28,7 +20,7 @@ Check the downloaded file against the release's published checksum:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-python3 -I -B ./droiddeck-0.1.1-rc.5-update.pyz verify
+python3 -I -B ./droiddeck-0.1.1-rc.7-update.pyz verify
 ```
 
 Require the updater file to report `OK`, followed by
@@ -59,7 +51,7 @@ or rebuild the baseline to make verification pass.
 Inside Ubuntu, run:
 
 ```sh
-sudo python3 -I -B ./droiddeck-0.1.1-rc.5-update.pyz \
+sudo python3 -I -B ./droiddeck-0.1.1-rc.7-update.pyz \
   install completed "$RC2_PACKAGE" --accept-existing-policy
 ```
 

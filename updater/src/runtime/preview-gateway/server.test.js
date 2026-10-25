@@ -106,7 +106,7 @@ test('running gateway release identity is static, uncached, read-only and exact-
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal(response.headers.get('content-type'), 'application/json');
-  assert.deepEqual(await response.json(), { kind: 'droiddeck-runtime-release', version: '0.1.1-rc.5', updateProtocol: 1 });
+  assert.deepEqual(await response.json(), { kind: 'droiddeck-runtime-release', version: '0.1.1-rc.7', updateProtocol: 1 });
   assert.equal((await fetch(base + '/api/runtimeRelease?diagnostic=1')).status, 400);
   assert.equal((await fetch(base + '/api/runtimeRelease', { headers: { Origin: 'https://foreign.example' } })).status, 403);
   const denied = await fetch(base + '/api/runtimeRelease', { method: 'POST', body: 'restart' });

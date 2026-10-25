@@ -1,7 +1,7 @@
 # Known Limitations
 
 - Technical pilot, not a prebuilt VM. RC2 is the clean installer; the signed
-  0.1.1-rc.5 pilot supports cumulative gateway updates on an existing RC2 setup.
+  0.1.1-rc.7 pilot supports cumulative gateway updates on an existing RC2 setup.
   Android images, frontend and native/Java libraries remain unchanged. See
   [the update guide](../UPDATE.md) for the original-RC2 rollback baseline and scope.
 - rc.2 includes the reboot fix. Configured rc.1 VMs should use

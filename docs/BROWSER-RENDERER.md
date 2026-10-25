@@ -1,55 +1,36 @@
 # Browser H264 compatibility
 
-The amended RC5 pilot removes the **Renderer** setting entirely. Normal visits
-use the proven legacy H264 decoder automatically.
+In Settings → Display → Renderer, choose **H264 (WebCodecs)** or **H264 (Legacy)**.
+The choice is saved only in that browser. Automatic keeps the compatible legacy default.
+A browser without the native decoding API keeps legacy playback.
 
-Both decoder paths receive the same H264 stream. Switching decoder does not add
-apps, change Android GPU rendering, or improve the stream's configured resolution,
-bitrate or audio features. WebCodecs can use a browser's native decoder, but its
-behavior depends on the browser/device. It displayed a picture in our Edge tests
-while the Tesla browser showed black screens. The pilot keeps the compatible
-default and includes an explicitly requested compatibility test.
+Both choices receive the same H264 video and AAC audio. Switching decoder does not
+change Android apps, GPU rendering, resolution or bitrate. WebCodecs uses the browser's
+native decoder; actual hardware selection and CPU savings depend on the device and
+have not been measured for this pilot.
 
-Old saved WebCodecs preferences and bookmarked `?video=webcodecs` URLs select
-legacy automatically. No browser-data reset, Android reinstall or repeated reload
-is needed. Other browser preferences and Android data remain unchanged.
+## Tesla compatibility fix
 
-The compatibility policies are part of the gateway update. They are appended when
-the renderer manager, Settings controller and WebCodecs worker are served; installed frontend files and their original
-ownership records remain unchanged. Rolling the gateway back removes the policy.
+The WebCodecs input normalizes redundant H264 Access Unit Delimiter (AUD) markers.
+It preserves all encoded picture slices, timestamps and complete frame boundaries.
+The isolated Tesla trial rendered 38 frames with no fallback and the tester confirmed
+a normal picture. This fixes the observed startup DataError; it is not a claim of
+universal browser compatibility or a long-duration soak test.
 
-## WebCodecs compatibility test
+The decoder checks support before configuring, uses bounded packet/byte queues,
+and invalidates pending work when a new session starts. On decoder failure or no
+startup frames, it navigates once to legacy. Failure of a saved WebCodecs choice
+also saves legacy for future visits in that browser. A healthy stream has no expiry.
+An explicit `?video=webcodecs-test` diagnostic leaves saved preferences unchanged.
 
-Only when parked, append `?video=webcodecs-test` to your existing HTTPS DroidDeck
-address. This is a diagnostic link, not a Settings choice or new default.
+## Updates and verification
 
-The candidate requests `no-preference` rather than `prefer-hardware`, checks the
-actual H264 configuration with `VideoDecoder.isConfigSupported`, and holds incoming
-packets within a fixed bound while support is checked. New stream sessions discard
-old pending checks. This lets the browser choose hardware decoding when supported;
-it does not prove that hardware was selected or that CPU use decreased.
+The policies ship with the gateway update; protected frontend inventories remain
+unchanged. Runtime health and the signed target read the same release version record.
+The builder rejects a mismatch before signing. A rejected RC6 attempt automatically
+rolled back; that attempt and its recovery history remain preserved. RC7 succeeds
+only after the exact signed package passes its in-place installation checks.
 
-An unsupported configuration, decoder error or no rendered frames within the
-startup interval navigates once to `?video=legacy`, preserving the rest of the URL.
-There are no preference writes or automatic trial retries. A healthy stream has no
-testing expiry. A black image reported as a rendered frame may still require Tesla
-investigation; this is not claimed to fix every GPU presentation issue.
-
-Verification includes Windows and Ubuntu gateway/TLS/authentication tests, native
-package reproduction and signature verification, and real H264 streams with old
-saved preferences and query parameters. The development-preview backport also
-passed actual desktop/mobile H264 and AAC playback without restarting Android.
-
-The amended RC5 package remains a draft candidate until the Tesla-browser test
-completes. Its exact signed single-file updater was successfully applied to an
-already configured RC2 VM after the original 35-phase ownership proof. Android
-data, TLS identity and original GPU watcher were preserved. Desktop tests confirm
-visible no-preference WebCodecs on both live streams and actual one-navigation
-recovery to legacy when an unsupported configuration is injected. The Renderer row
-is absent in both actual updated/preview UIs while other display controls remain
-available. Actual updated-package fault injection recovered once to legacy and
-preserved other query parameters and the URL hash. Updated desktop/mobile H264
-and AAC and full native Mesa/VirGL/allocator/software-decoder checks passed.
-The previous updater-engine crash/reboot and
-rollback evidence is recorded separately; it is not a new full acceptance run of
-the amended package. See the release's `release.json` for its current status.
+See the release's `release.json` for exact acceptance and pending gates. Historical
+updater-engine reboot/crash/rollback evidence is listed separately, not reassigned
+to a newly built package. Use [UPDATE.md](../UPDATE.md) for installation and rollback.

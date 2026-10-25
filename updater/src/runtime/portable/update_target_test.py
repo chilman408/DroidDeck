@@ -15,6 +15,13 @@ spec.loader.exec_module(D)
 
 
 class Target(unittest.TestCase):
+    def test_manifest_target_and_gateway_health_use_one_release_record(self):
+        record=Path(__file__).parents[1]/'preview-gateway/release-version.json'
+        self.assertTrue(record.is_file(),'Shared gateway/package version record required')
+        self.assertEqual(D.VERSION,D.P.document(record.read_bytes())['version'])
+        self.assertEqual(D.VERSION,'0.1.1-rc.7')
+        self.assertIn('release-version.json',D.GATEWAY)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='droiddeck-target-build-fixture-')
         self.addCleanup(self.temp.cleanup)
@@ -22,6 +29,7 @@ class Target(unittest.TestCase):
         self.repo = self.root / 'repo'; self.repo.mkdir()
         self.gateway = self.repo / 'runtime/preview-gateway'; self.gateway.mkdir(parents=True)
         for name in D.GATEWAY: (self.gateway / name).write_bytes(('// fixture source ' + name + '\n').encode())
+        (self.gateway/'release-version.json').write_bytes(D.P.encode({'version':D.VERSION}))
         self.git('init', '-q')
         self.git('config', 'user.name', 'Fixture'); self.git('config', 'user.email', 'fixture@example.invalid')
         self.git('config', 'core.autocrlf', 'false'); self.git('add', 'runtime')
@@ -66,6 +74,13 @@ class Target(unittest.TestCase):
         with tarfile.open(fileobj=output, mode='w:') as archive:
             item = tarfile.TarInfo('link'); item.type = tarfile.SYMTYPE; item.linkname = '/etc/passwd'; archive.addfile(item)
         with self.assertRaises(ValueError): D.sources(output.getvalue())
+
+    def test_committed_gateway_version_drift_refuses_payload_before_signing(self):
+        (self.gateway/'release-version.json').write_bytes(D.P.encode({'version':'0.1.1-rc.5'}))
+        self.git('add','runtime');self.git('commit','-qm','generated stale gateway version fixture')
+        revision=self.git('rev-parse','HEAD').decode().strip()
+        with self.assertRaisesRegex(ValueError,'Gateway health identity'):
+            D.build(D.source_archive(self.repo,revision),self.inventory,self.dep)
 
     def test_unknown_source_or_noncommit_revision_refuses(self):
         for name in ('runtime/../escape.js', 'runtime/.ssh/key.js', '/runtime/server.js', 'runtime/.env', 'tools/credential.pem'):

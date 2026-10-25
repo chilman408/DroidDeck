@@ -10,19 +10,22 @@ const { execFileSync } = require('node:child_process');
 const { createGateway } = require('./server');
 const policy = fs.readFileSync(path.join(__dirname, 'browser-renderer-policy.js'), 'utf8');
 
-function fixture(value, query = '') {
+function fixture(value, query = '', available = true, oldGuard = false) {
   const selections = [];
-  const timers = [], navigations = [], cancelled = [];
-  const preferences = { choice: () => value, select: value => selections.push(value) };
+  const timers = [], navigations = [], cancelled = [], writes=[];
+  let saved=value;
+  const preferences = { choice: () => oldGuard?'legacy':value, select: value => {if(oldGuard&&value==='webcodecs')throw new Error('Old guard');selections.push(value);} };
   const prototype = { _rendererInfoForId: id => ({ id, packetFormat: 'scrcpy', binaryType: 'arraybuffer',
     scriptPath: id === 1 ? './js/display/renderers/h264-webcodecs/h264WebCodecs.js' : 'unchanged' }) };
   const window = { TAHtml: { browserRenderer: preferences, DisplayRendererManager: function () {} },
-    location: { search: query, href: 'https://example.test/' + query + '#home', replace: url => navigations.push(url) },
+    location: { search: query, href: 'https://example.test/' + query + '#home', replace: url => navigations.push(url),reload:()=>navigations.push('reload') },
     isSecureContext: true, VideoDecoder() {}, document: { getElementById: () => ({ dataset: {} }) },
+    localStorage:{getItem:()=>saved,setItem:(key,value)=>{saved=value;writes.push({key,value});}},
     setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout: id => cancelled.push(id) };
   window.TAHtml.DisplayRendererManager.prototype = prototype;
+  if(!available)delete window.VideoDecoder;
   vm.runInNewContext(policy, { window, URL, URLSearchParams });
-  return { preferences, prototype, selections, timers, navigations, cancelled, window };
+  return { preferences, prototype, selections, timers, navigations, cancelled, writes, window };
 }
 
 test('WebCodecs test link is explicit and recovers once to a non-trial legacy URL', () => {
@@ -51,33 +54,55 @@ test('a test link with decoded frames does not expire a healthy stream', () => {
   assert.equal(f.preferences.effectiveChoice(), 'webcodecs');
 });
 
-test('renderer settings row is omitted while unrelated settings still append', () => {
+test('renderer settings row returns when WebCodecs is available, without altering other settings', () => {
+ for(const available of [true,false]){
   const tiles = [];
-  const window = { TAHtml: { SettingsController: function () {} } };
+  const window = { TAHtml: { SettingsController: function () {},browserRenderer:{options:()=>available?[{value:'webcodecs'},{value:'legacy'}]:[{value:'legacy'}]} } };
   window.TAHtml.SettingsController.prototype._appendTile = tile => tiles.push(tile);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'browser-settings-policy.js'), 'utf8'), { window });
   const controller = new window.TAHtml.SettingsController();
   controller._appendTile({ title: 'Renderer' }); controller._appendTile({ title: 'Resolution' });
-  assert.deepEqual(tiles, [{ title: 'Resolution' }]);
+  assert.deepEqual(tiles, available?[{title:'Renderer'},{ title: 'Resolution' }]:[{ title: 'Resolution' }]);
+ }
 });
 
-test('old saved or bookmarked WebCodecs selections recover without writes or reload loops', () => {
+test('browser selection enables WebCodecs while automatic remains legacy by default', () => {
   for (const value of ['auto', 'legacy', 'webcodecs']) {
-    const { preferences, prototype, selections } = fixture(value);
-    assert.equal(preferences.choice(), value === 'webcodecs' ? 'legacy' : value);
-    assert.equal(preferences.effectiveChoice(), 'legacy');
-    assert.deepEqual(Array.from(preferences.options(), o => o.value), ['auto', 'legacy']);
+    const { preferences, prototype, selections,writes } = fixture(value);
+    assert.equal(preferences.choice(), value);
+    assert.equal(preferences.effectiveChoice(), value==='webcodecs'?'webcodecs':'legacy');
+    assert.deepEqual(Array.from(preferences.options(), o => o.value), ['auto', 'webcodecs','legacy']);
     for (const id of [0, 1, 2]) {
       const result = prototype._rendererInfoForId(id);
-      assert.equal(result.id, id === 1 ? 2 : id);
+      assert.equal(result.id, value==='webcodecs'?1:id === 1 ? 2 : id);
       assert.equal(result.packetFormat, 'scrcpy');
-      if (id === 1) assert.match(result.scriptPath, /h264-broadway/);
+      if(value==='webcodecs')assert.match(result.scriptPath,/h264-webcodecs/);
+      else if (id === 1) assert.match(result.scriptPath, /h264-broadway/);
     }
     assert.deepEqual(selections, []);
-    assert.throws(() => preferences.select('webcodecs'));
-    preferences.select('legacy'); preferences.select('auto');
-    assert.deepEqual(selections, ['legacy', 'auto']);
+    preferences.select('webcodecs');preferences.select('legacy'); preferences.select('auto');
+    assert.deepEqual(selections, []);
+    assert.deepEqual(writes.map(x=>x.value), ['webcodecs','legacy', 'auto']);
   }
+});
+test('restored browser preference bypasses historical legacy-only wrappers',()=>{
+ const f=fixture('webcodecs','',true,true);
+ assert.equal(f.preferences.choice(),'webcodecs');
+ assert.doesNotThrow(()=>f.preferences.select('webcodecs'));
+ assert.equal(f.preferences.effectiveChoice(),'webcodecs');
+ assert.deepEqual(f.writes,[{key:'TeslaAndroid_browserH264Renderer_v1',value:'webcodecs'}]);
+});
+
+test('saved WebCodecs failure persists browser-local legacy and navigates only once',()=>{
+ const f=fixture('webcodecs','?other=keep');f.prototype._rendererInfoForId(2);
+ assert.equal(f.preferences.recover(),true);assert.equal(f.preferences.recover(),false);
+ assert.deepEqual(f.writes,[{key:'TeslaAndroid_browserH264Renderer_v1',value:'legacy'}]);
+ assert.deepEqual(f.navigations,['https://example.test/?other=keep&video=legacy#home']);
+ assert.equal(f.preferences.effectiveChoice(),'legacy');
+ const unsupported=fixture('webcodecs','',false);
+ assert.equal(unsupported.preferences.effectiveChoice(),'legacy');
+ assert.throws(()=>unsupported.preferences.select('webcodecs'));
+ assert.deepEqual(Array.from(unsupported.preferences.options(),x=>x.value),['auto','legacy']);
 });
 
 test('gateway serves the policy after authentication, without modifying the frontend file', async t => {

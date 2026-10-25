@@ -15,7 +15,9 @@ const { deriveRuntimeLayout } = require('../portable/runtime-config');
 
 // Static public build identity lets a pinned-TLS updater verify the NEW process
 // even when browser login is enabled. No host, account or session state here.
-const RUNTIME_RELEASE = Object.freeze({ kind: 'droiddeck-runtime-release', version: '0.1.1-rc.5', updateProtocol: 1 });
+const RELEASE_VERSION = require('./release-version.json').version;
+if (typeof RELEASE_VERSION !== 'string' || !/^\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?$/.test(RELEASE_VERSION)) throw new Error('Fixed release version required');
+const RUNTIME_RELEASE = Object.freeze({ kind: 'droiddeck-runtime-release', version: RELEASE_VERSION, updateProtocol: 1 });
 
 const DEFAULT_TARGETS = {
   api: "http://127.0.0.1:18081",
