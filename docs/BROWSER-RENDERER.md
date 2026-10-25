@@ -1,6 +1,6 @@
 # Browser H264 compatibility
 
-In Settings → Display → Renderer, choose **H264 (WebCodecs)** or **H264 (Legacy)**.
+In Settings â†’ Display â†’ Renderer, choose **H264 (WebCodecs)** or **H264 (Legacy)**.
 The choice is saved only in that browser. Automatic keeps the compatible legacy default.
 A browser without the native decoding API keeps legacy playback.
 
@@ -28,8 +28,8 @@ An explicit `?video=webcodecs-test` diagnostic leaves saved preferences unchange
 The policies ship with the gateway update; protected frontend inventories remain
 unchanged. Runtime health and the signed target read the same release version record.
 The builder rejects a mismatch before signing. A rejected RC6 attempt automatically
-rolled back; that attempt and its recovery history remain preserved. RC7 succeeds
-only after the exact signed package passes its in-place installation checks.
+rolled back; that attempt and its recovery history remain preserved. The exact signed RC7 package passed in-place installation, both Settings choices,
+video/audio and native GPU checks. Reboot acceptance is recorded in release.json.
 
 See the release's `release.json` for exact acceptance and pending gates. Historical
 updater-engine reboot/crash/rollback evidence is listed separately, not reassigned
