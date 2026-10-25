@@ -246,7 +246,7 @@ def main(args):
     entries = package_entries(Path(sys.argv[0])); release, _manifest, files = authenticate(entries)
     if args == ['verify']:
         print(json.dumps({'kind': 'droiddeck-signed-updater-verified', 'target': release['target'], 'keySha256': KEY_PIN, 'servicesChanged': False})); return
-    if (len(args) not in (3, 4) or args[0] != 'install' or args[1] not in ('completed', 'recovered')
+    if (len(args) not in (3, 4) or args[0] not in ('install', 'enable-updates') or args[1] not in ('completed', 'recovered')
             or len(args) == 4 and args[3] != '--accept-existing-policy' or os.geteuid() != 0):
         raise ValueError('verify OR sudo python3 PACKAGE.pyz install completed|recovered ABSOLUTE_RC2_PACKAGE [--accept-existing-policy]')
     os.umask(0o077)
@@ -261,6 +261,11 @@ def main(args):
         module.P.encode({'schema': 1, 'kind': 'droiddeck-update-trust', 'channel': 'pilot', 'publicKeySpkiHex': PUBLIC_KEY}))
     pin = module.P.sha(module.P.encode(module.B.rows(module.B.overlays(source))))
     module.bootstrap(source, pin, args[1], args[2], accept_existing=len(args) == 4)
+    ui_spec = importlib.util.spec_from_file_location('verified_update_ui', source / 'runtime/portable/update-ui.py')
+    ui = importlib.util.module_from_spec(ui_spec); ui_spec.loader.exec_module(ui)
+    result = ui.enroll(source)
+    if args[0] == 'enable-updates':
+        print(json.dumps(result, sort_keys=True)); return
     enrolled = module.B.SOURCE / module.SELF
     os.execv('/usr/bin/python3', ['/usr/bin/python3', '-I', '-B', str(enrolled), 'install', args[1], args[2],
         str(root / 'update.tar'), str(root / 'statement.json'), str(root / 'signature.bin')])

@@ -1,8 +1,8 @@
-# Signed pilot update: 0.1.1-rc.7
+# Signed pilot update: 0.1.1-rc.11
 
 For an existing working RC2 installation or an older signed gateway candidate.
 This update preserves Android apps, accounts, configuration and HTTPS identity.
-It restores the browser-local Renderer choice and includes the Tesla-tested AUD fix.
+It adds Updates in Settings and retains the browser-local Renderer choice and Tesla-tested AUD fix.
 Automatic still uses legacy. See [browser compatibility](docs/BROWSER-RENDERER.md).
 
 Use Ubuntu 26.04.1 x86_64 with the accepted Unraid KVM/VirGL setup. For a new VM,
@@ -11,7 +11,7 @@ an existing signed-in Android setup. Require `release.json` acceptance before us
 
 ## Download and verify
 
-Download `droiddeck-0.1.1-rc.7-update.pyz` and `SHA256SUMS` from the official
+Download `droiddeck-0.1.1-rc.11-update.pyz` and `SHA256SUMS` from the official
 [DroidDeck pilot release](https://github.com/chilman408/DroidDeck/releases).
 The `.pyz` is the complete updater: it contains the payload, public source archive,
 release statement, detached signature and installer. It needs no separate hotfix.
@@ -20,7 +20,7 @@ Check the downloaded file against the release's published checksum:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-python3 -I -B ./droiddeck-0.1.1-rc.7-update.pyz verify
+python3 -I -B ./droiddeck-0.1.1-rc.11-update.pyz verify
 ```
 
 Require the updater file to report `OK`, followed by
@@ -51,7 +51,7 @@ or rebuild the baseline to make verification pass.
 Inside Ubuntu, run:
 
 ```sh
-sudo python3 -I -B ./droiddeck-0.1.1-rc.7-update.pyz \
+sudo python3 -I -B ./droiddeck-0.1.1-rc.11-update.pyz \
   install completed "$RC2_PACKAGE" --accept-existing-policy
 ```
 
@@ -70,6 +70,33 @@ reports `gateway-chain-already-installed` without replaying it.
 Open your usual DroidDeck HTTPS address and check video, sound and controls. The
 address, certificate, browser-login preference and Android configuration stay the
 same. No Ubuntu desktop login is required after reboot.
+
+## Update from Settings
+
+After this initial signed updater installation, open **Settings → Updates**:
+
+1. Check the installed version and select **Check for updates**.
+2. Select the offered version, then confirm **Install**. The picture can briefly
+   disconnect while the gateway is replaced. Apps and Android data stay intact.
+3. Keep the page open or reconnect to your usual DroidDeck address. The independent
+   helper retains the operation and reports its progress across browser reloads.
+4. To restore the original gateway, select **Roll back update** and confirm.
+   Completion requires the original recovery verifier, rather than service startup.
+
+Only the primary display can check, install or request rollback. Updates uses the
+same browser access settings and display-session protections as other shared
+Settings. Browser login remains optional; no Linux or VM password is entered in
+the Updates page. The helper accepts only official DroidDeck pilot releases and
+verifies the existing Ed25519 signature before executing downloaded code.
+
+Rollback restores **the original RC2 gateway**, not the immediately preceding
+candidate. That original version may not include Updates in Settings; reopen the
+usual DroidDeck address to use it. The independent helper and recovery records
+remain retained. Install a strictly newer signed updater using the command above
+to return to the newer interface. A rolled-back version is consumed and is not
+advertised for reinstallation. Do not delete its protected history.
+
+The command-line status/rollback interface below remains available for diagnosis.
 
 ## Status and rollback
 
@@ -99,8 +126,9 @@ preserved. A rolled-back attempt is retained and cannot be reapplied as a new on
 
 ## Later releases and interrupted updates
 
-Download and verify the next signed `.pyz`, then run its `install completed`
-command with the same original RC2 package. This pilot uses cumulative gateway
+Use Settings → Updates for later official releases. For administrator-managed
+installation, download and verify the next signed `.pyz`, then run its
+`install completed` command with the same original RC2 package. This pilot uses cumulative gateway
 updates: it first returns the preceding attempt to the verified RC2 baseline,
 then applies the newer target. Android remains installed throughout. Rollback
 returns to RC2, rather than an arbitrary earlier target release.
@@ -119,7 +147,10 @@ backup as usual; the updater does not create or upload a backup of Android data.
 
 - Gateway updates only; Android images, native/Java libraries and frontend are
   preserved. Changing the independent updater itself needs a reviewed migration.
-- Manual release installation; no unattended download or update scheduling.
+- Explicit browser or command-line installation; no unattended update scheduling.
+- The first signed update installs a separate root-owned UI helper. The original
+  privileged updater/recovery authority is retained; replacing that authority or
+  migrating an existing helper protocol requires separate reviewed work.
 - Up to 32 retained cumulative release attempts per enrolled controller. Nothing
   silently deletes previous attempts or adopts replacement files.
 - Tested Ubuntu/Unraid/VirGL configuration; other platforms need verification.

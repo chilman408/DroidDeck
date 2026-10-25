@@ -161,7 +161,8 @@ test('gateway serves the policy after authentication, without modifying the fron
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.deepEqual(response.body, Buffer.concat([original, Buffer.from('\n;\n'),
-      fs.readFileSync(path.join(__dirname, policyFile))]));
+      fs.readFileSync(path.join(__dirname, policyFile)), ...(asset.includes('/settings/') ?
+        [Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js'))] : [])]));
     assert.deepEqual(fs.readFileSync(path.join(root, asset)), original);
   }
 });
