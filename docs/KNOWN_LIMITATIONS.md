@@ -1,6 +1,9 @@
 # Known Limitations
 
-- Source-only technical pilot, not a prebuilt VM or general in-place updater.
+- Technical pilot, not a prebuilt VM. RC2 is the clean installer; the signed
+  0.1.1-rc.7 pilot supports cumulative gateway updates on an existing RC2 setup.
+  Android images, frontend and native/Java libraries remain unchanged. See
+  [the update guide](../UPDATE.md) for the original-RC2 rollback baseline and scope.
 - rc.2 includes the reboot fix. Configured rc.1 VMs should use
   [their dedicated hotfix](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1-hotfix.1),
   not reinstall over their Android data.
@@ -19,5 +22,7 @@
   testing; desktop/mobile checks do not certify every vehicle browser.
 - Generated media tests do not establish numerical AV-sync accuracy or universal
   app compatibility. No PNG video fallback or healthy-service expiry is installed.
-- Checksums and acceptance records are not digital signatures. Reproducible
-  prebuilt binary distribution is outside this source pilot.
+- RC2 uses published checksums and acceptance records. The gateway updater adds
+  Ed25519 signatures binding its exact source and payload archives; its initial
+  downloaded launcher still needs the trusted release channel and published
+  checksum. Reproducible general prebuilt-VM distribution remains outside scope.

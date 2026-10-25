@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "blissos": {
+    "url": "https://github.com/BlissOS/platform_manifest.git",
+    "branch": "voyager-x86",
+    "revision": "db973c9fec45d90f4b85de56c6711e0227716e69"
+  },
+  "rpi4_baseline": {
+    "url": "https://github.com/tesla-android/android-raspberry-pi.git",
+    "revision": "c3e5409dcd325b95d5d6b451d80efd15536fa1b9",
+    "manifest": "manifests/tesla-android.xml"
+  },
+  "frontend": {
+    "url": "https://github.com/tesla-android/frontend.git",
+    "revision": "34763a62819a1dedad9d3eb62f1e175f2659091f",
+    "license_status": "GPL-3.0"
+  },
+  "tesla_components": [
+    {
+      "path": "external/libws",
+      "url": "https://github.com/tesla-android/android-external-libws.git",
+      "revision": "8d2e2f2923d15baba6101d879fc9593ef4a0ef78",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "external/usb-modeswitch",
+      "url": "https://github.com/tesla-android/android-external-usb-modeswitch.git",
+      "revision": "31c78410637978b7b71accf1e3719658a7a247f0",
+      "license_status": "unresolved"
+    },
+    {
+      "path": "external/tesla-android-virtual-gnss",
+      "url": "https://github.com/tesla-android/android-external-tesla-android-virtual-gnss.git",
+      "revision": "83f4b4c730db9842133f8ffc5df4f0dc115a7fd4",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "external/tesla-android-virtual-display",
+      "url": "https://github.com/tesla-android/android-external-tesla-android-virtual-display.git",
+      "revision": "6bfadda212f765786d85c85e76f1d4c1813ca5ab",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "external/tesla-android-virtual-touchscreen",
+      "url": "https://github.com/tesla-android/android-external-tesla-android-virtual-touchscreen.git",
+      "revision": "fb1795a1c86dd13563d2c44757fd3e6d9e838421",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "external/tesla-android-usb-networking-initialiser",
+      "url": "https://github.com/tesla-android/android-external-tesla-android-usb-networking-initialiser.git",
+      "revision": "2f161ece9e52f8f01e12fa27f7d37f13d509f802",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "external/tesla-android-configuration-manager",
+      "url": "https://github.com/tesla-android/android-external-tesla-android-configuration-manager.git",
+      "revision": "6e3707cbeafa4a9a29d1e77ab3ad0e793836ace2",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "external/tesla-android-audio-relay",
+      "url": "https://github.com/tesla-android/android-external-tesla-android-audio-relay.git",
+      "revision": "717d0a8eec5d7b305f2f98b806b438a4dcebfe6f",
+      "license_status": "GPL-3.0"
+    },
+    {
+      "path": "vendor/tesla-android",
+      "url": "https://github.com/tesla-android/android-vendor-tesla-android.git",
+      "revision": "6e139bf41585188308e053dcbb34855f644aedba",
+      "license_status": "unresolved"
+    },
+    {
+      "path": "packages/apps/Updater",
+      "url": "https://github.com/tesla-android/android-packages-apps-updater.git",
+      "revision": "184eb00ce0add9b5ed0c22e5c8167ff5d0b596c8",
+      "license_status": "unresolved"
+    }
+  ]
+}

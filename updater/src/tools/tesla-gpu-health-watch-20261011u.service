@@ -1,0 +1,17 @@
+[Unit]
+Description=Health-protected TeslaAndroid GPU candidate u
+Wants=tesla-waydroid-runtime.service
+After=tesla-waydroid-runtime.service
+
+[Service]
+Type=simple
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/teslaandroid-waydroid/gpu-health-trial-20261011u/tools/waydroid-gpu-health-watch.py --watch
+Restart=on-failure
+RestartSec=30s
+KillMode=control-group
+TimeoutStopSec=600s
+
+[Install]
+WantedBy=multi-user.target

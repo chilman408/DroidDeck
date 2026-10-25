@@ -1,0 +1,330 @@
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 2a439c7..7801a90 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -22,7 +22,6 @@
+ 
+       this.sections = [
+         { id: "display", title: "Display", icon: "monitor" },
+-        { id: "rearDisplay", title: "Rear Display", icon: "tv" },
+         { id: "network", title: "Network", icon: "wifi" },
+         { id: "audio", title: "Audio", icon: "speaker" },
+         { id: "gps", title: "GPS", icon: "gps_fixed" },
+@@ -48,7 +47,7 @@
+     }
+ 
+     async setActiveSection(sectionId) {
+-      this.activeSectionId = sectionId;
++      this.activeSectionId = sectionId === "rearDisplay" ? "display" : sectionId;
+       this._renderSidebar();
+       await this._renderActiveSection();
+       this._refreshNetworkBanner();
+@@ -61,15 +60,12 @@
+ 
+       if (this.content.dataset) delete this.content.dataset.vmDeviceInfo;
+       if (this.content.dataset) delete this.content.dataset.vmNetworkInfo;
++      if (this.content.dataset) delete this.content.dataset.vmDisplayControls;
+ 
+       if (this.activeSectionId === "display") {
+         await this._renderDisplaySection(token);
+         return;
+       }
+-      if (this.activeSectionId === "rearDisplay") {
+-        await this._renderRearDisplaySection(token);
+-        return;
+-      }
+       if (this.activeSectionId === "network") {
+         await this._renderNetworkSection(token);
+         return;
+@@ -198,6 +194,7 @@
+       this.content.innerHTML = "";
+ 
+       if (config.displayControlSupported === 1) {
++        if (this.content.dataset) this.content.dataset.vmDisplayControls = "";
+         this._displayControlGeneration = config.generation;
+         const resolution = this._createSelect(constants.DISPLAY_RESOLUTION_PRESETS, config.resolutionPreset,
+           async value => { await this._updateDisplayConfig(draft => { draft.resolutionPreset = utils.toInt(value, config.resolutionPreset); }); });
+@@ -253,6 +250,7 @@
+         } else {
+           this._appendTile({ icon: "monitor", title: "Refresh rate", trailing: this._createTrailingText("30 Hz") });
+         }
++        this._renderSecondaryDisplaySettings(config);
+         if (this.displaySettingsError) {
+           const status = utils.createElement("div", "settings-error", this.displaySettingsError);
+           status.setAttribute("role", "status"); this.content.appendChild(status);
+@@ -335,17 +333,18 @@
+       this._appendDescription(
+         "Advanced setting, Tesla Android can automatically resize the virtual display when the browser window size changes. If you disable this option, the display aspect will be locked on the current value.",
+       );
++      this._renderSecondaryDisplaySettings(config);
+     }
+ 
+     _rearSharedAllowed(state) {
+-      return Boolean(!this.rearSettingsPending && state?.canControl && state.transactionStatus === "idle" &&
++      return Boolean(!this.rearSettingsPending && !this.videoSettingsPending && state?.canControl && state.transactionStatus === "idle" &&
+         !this.displayController.controlRequestInFlight);
+     }
+ 
+     _renderControlledRearDisplay(config) {
+       const rolePicker = utils.createElement("div", "rear-role-picker", null);
+       rolePicker.setAttribute("data-rear-role", "");
+-      for (const [role, label] of [["primary", "Main"], ["rear", "Rear"]]) {
++      for (const [role, label] of [["primary", "Primary Display"], ["rear", "Secondary Display"]]) {
+         const choice = document.createElement("label"), input = document.createElement("input");
+         input.type = "radio"; input.name = "rear-display-role"; input.value = role;
+         input.checked = config.displayRole === role;
+@@ -354,16 +353,17 @@
+         });
+         choice.appendChild(input); choice.appendChild(utils.createElement("span", null, label)); rolePicker.appendChild(choice);
+       }
+-      this._appendTile({ icon: "screenshot_monitor", title: "This Display", trailing: rolePicker });
++      const roleTile = this._appendTile({ icon: "screenshot_monitor", title: "This Display", trailing: rolePicker });
++      roleTile?.setAttribute("data-display-role-tile", "");
+       const addSharedSwitch = (title, checked, patch) => {
+         const switchControl = this._createSwitch(checked, value => this._changeControlledRear(config, patch(value)),
+           () => this._rearSharedAllowed(this.displayController.remoteDisplayState));
+         switchControl.setAttribute("data-rear-shared", "");
+         this._appendTile({ icon: "monitor", title, trailing: switchControl });
+       };
+-      addSharedSwitch("Rear Display Support", config.isRearDisplayEnabled === 1, enabled => ({ enabled }));
++      addSharedSwitch("Secondary Display", config.isRearDisplayEnabled === 1, enabled => ({ enabled }));
+       if (config.isRearDisplayEnabled === 1) {
+-        addSharedSwitch("Rear Display Priority", config.isRearDisplayPrioritised === 1, prioritised => ({ prioritised }));
++        addSharedSwitch("Secondary Display Priority", config.isRearDisplayPrioritised === 1, prioritised => ({ prioritised }));
+       }
+       if (this.rearSettingsError) this._appendDescription(this.rearSettingsError);
+       this._rearControlGeneration = config.generation;
+@@ -371,7 +371,8 @@
+     }
+ 
+     async _changeControlledRear(config, change) {
+-      if (this.rearSettingsPending) return;
++      if (this.activeSectionId !== "display" || this.rearSettingsPending || this.videoSettingsPending ||
++          this.displayController.controlRequestInFlight || this.displayController.remoteDisplayState.transactionStatus !== "idle") return;
+       if (!("role" in change) && !this._rearSharedAllowed(this.displayController.remoteDisplayState)) return;
+       this.rearSettingsPending = true; this.rearSettingsError = null;
+       this.refreshDisplayControl(this.displayController.remoteDisplayState);
+@@ -379,42 +380,27 @@
+         if ("role" in change) await this.displayController.selectPrimaryDisplay(change.role === "primary");
+         else await this.displayController.updateRearSettings({ revision: config.rearDisplayRevision,
+           enabled: config.isRearDisplayEnabled === 1, prioritised: config.isRearDisplayPrioritised === 1, ...change });
+-      } catch (_error) { this.rearSettingsError = "Rear display change failed. Reload settings and retry."; }
++      } catch (_error) { this.rearSettingsError = "Secondary display change failed. Reload settings and retry."; }
+       finally {
+         this.rearSettingsPending = false;
+-        if (this.activeSectionId === "rearDisplay") await this._renderActiveSection();
++        if (this.activeSectionId === "display") await this._renderActiveSection();
+       }
+     }
+ 
+-    async _renderRearDisplaySection(token) {
+-      this._appendLoadingState();
+-
+-      let config;
+-      try {
+-        config = this._normalizeDisplayState(await this.apiClient.fetchDisplayState());
+-      } catch (_error) {
+-        this._renderErrorState("Service error");
+-        return;
+-      }
+-
+-      if (token !== this._renderToken || this.activeSectionId !== "rearDisplay") {
+-        return;
+-      }
+-
+-      this.content.innerHTML = "";
+-
++    _renderSecondaryDisplaySettings(config) {
++      this._appendDivider();
+       if (config.rearDisplayControlSupported === 1) {
+         this._renderControlledRearDisplay(config);
+         return;
+       }
+       if (config.displayControlSupported === 1) {
+-        this._appendTile({ icon: "monitor", title: "Rear Display Support", trailing: this._createTrailingText("Unavailable") });
++        this._appendTile({ icon: "monitor", title: "Secondary Display", trailing: this._createTrailingText("Unavailable") });
+         return;
+       }
+ 
+       this._appendTile({
+         icon: "monitor",
+-        title: "Rear Display Support",
++        title: "Secondary Display",
+         trailing: this._createSwitch(config.isRearDisplayEnabled === 1, async (checked) => {
+           await this._updateDisplayConfig((draft) => {
+             draft.isRearDisplayEnabled = checked ? 1 : 0;
+@@ -422,9 +408,6 @@
+           await this._renderActiveSection();
+         }),
+       });
+-      this._appendDescription(
+-        "Enable if your vehicle is equipped with a factory rear display.\n\nSupported models:\n\n- Model 3 (2023+ / \u201cHighland\u201d)\n- Model Y (2025+ / \u201cJuniper\u201d)\n- Model S/X (2021+)\n- Cybertruck",
+-      );
+ 
+       if (config.isRearDisplayEnabled === 1) {
+         const isPrimaryDisplay = this._readPrimaryDisplayPreference();
+@@ -440,38 +423,23 @@
+             },
+           ),
+         });
+-        this._appendDescription(
+-          "Enable this option if you are currently using Tesla Android on your main infotainment display.",
+-        );
+ 
+         this._appendDivider();
+         this._appendTile({
+           icon: "aspect_ratio",
+-          title: "Rear Display Priority",
++          title: "Secondary Display Priority",
+           trailing: this._createSwitch(config.isRearDisplayPrioritised === 1, async (checked) => {
+             await this._updateDisplayConfig((draft) => {
+               draft.isRearDisplayPrioritised = checked ? 1 : 0;
+             }, false);
+           }),
+         });
+-        this._appendDescription(
+-          "Enable this option to synchronize the aspect ratio of your Tesla Android display with the secondary display.",
+-        );
+       }
+     }
+ 
+     async _renderNetworkSection(token) {
+       this._appendLoadingState();
+ 
+-      if (!this.systemConfigCache) {
+-        try {
+-          this.systemConfigCache = await this.apiClient.fetchSystemConfiguration();
+-        } catch (_error) {
+-          this._renderErrorState("Failed to fetch Wi-Fi configuration from your device.");
+-          return;
+-        }
+-      }
+-
+       if (this.displayController.remoteDisplayState?.displayControlSupported === 1) {
+         let info;
+         try { info = await this.apiClient.fetchDeviceInfo(); }
+@@ -488,13 +456,19 @@
+           ["route", "Android network", info.network_mode || "Unavailable"]];
+         for (const address of info.android_addresses || []) rows.push(["lan", "Android IPv4 (" + address.interface + ")", address.address]);
+         if (!info.android_addresses?.length) rows.push(["lan", "Android IPv4", "Unavailable"]);
+-        rows.push(["wifi", "Wi-Fi hotspot", "Unavailable"], ["cloud_off", "Offline routing", "Unavailable"],
+-          ["sync", "Telemetry proxy", "Unavailable"], ["download", "Firmware proxy", "Unavailable"]);
+         for (const [icon, title, value] of rows) this._appendTile({ icon, title, trailing: this._createTrailingText(value), dense: false });
+         this._refreshNetworkBanner();
+         return;
+       }
+ 
++      if (!this.systemConfigCache) {
++        try { this.systemConfigCache = await this.apiClient.fetchSystemConfiguration(); }
++        catch (_error) {
++          if (token === this._renderToken && this.activeSectionId === "network") this._renderErrorState("Failed to fetch Wi-Fi configuration from your device.");
++          return;
++        }
++      }
++
+       if (!this.networkPendingConfig) {
+         this.networkPendingConfig = this._networkPendingFromSystemConfig(this.systemConfigCache);
+       }
+@@ -829,12 +803,8 @@
+         ["schedule", "Host uptime", uptime],
+         ["terminal", "Host kernel", value(info.kernel_release)],
+         ["computer", "Host name", value(info.host_name)],
+-        ["device_thermostat", "CPU Temperature", number(info.cpu_temperature) ? info.cpu_temperature + "\u00B0C" : "Unavailable"],
+-        ["developer_board", "Serial Number", value(info.serial_number)],
+-        ["broadcast_on_home", "CarPlay Module", "Unavailable"],
+-        ["cell_tower", "LTE Modem", "Unavailable"],
+-        ["update", "Release type", value(info.release_type).toUpperCase()],
+       ];
++      if (number(info.cpu_temperature)) rows.push(["device_thermostat", "CPU Temperature", info.cpu_temperature + "\u00B0C"]);
+       for (const [icon, title, text] of rows) {
+         this._appendTile({ icon, title, trailing: this._createTrailingText(text), dense: false });
+       }
+@@ -958,14 +928,10 @@
+     }
+ 
+     refreshDisplayControl(state) {
+-      if (this.activeSectionId === "rearDisplay" && state.rearDisplayControlSupported === 1) {
+-        const busy = this.rearSettingsPending || this.displayController.controlRequestInFlight || state.transactionStatus !== "idle";
++      if (this.activeSectionId === "display" && state.rearDisplayControlSupported === 1) {
++        const busy = this.rearSettingsPending || this.videoSettingsPending || this.displayController.controlRequestInFlight || state.transactionStatus !== "idle";
+         for (const input of this.content.querySelectorAll("[data-rear-role] input")) input.disabled = Boolean(busy);
+         for (const input of this.content.querySelectorAll("[data-rear-shared] input")) input.disabled = !this._rearSharedAllowed(state);
+-        if (!busy && this._rearControlGeneration !== state.generation) {
+-          this._rearControlGeneration = state.generation; void this._renderActiveSection();
+-        }
+-        return;
+       }
+       if (this.activeSectionId === "audio" && this.apiClient.browserAudioSupported) {
+         const allowed = this._audioSettingsAllowed(state);
+@@ -981,10 +947,10 @@
+         return;
+       }
+       if (this.activeSectionId !== "display" || state.displayControlSupported !== 1) return;
+-      const enabled = !this.videoSettingsPending && state.canControl && state.transactionStatus === "idle" &&
++      const enabled = !this.videoSettingsPending && !this.rearSettingsPending && state.canControl && state.transactionStatus === "idle" &&
+         !this.displayController.controlRequestInFlight;
+       for (const input of this.content.querySelectorAll("button, input")) {
+-        if (!input.closest?.("[data-browser-renderer]")) input.disabled = !enabled ||
++        if (!input.closest?.("[data-browser-renderer], [data-rear-role], [data-rear-shared]")) input.disabled = !enabled ||
+           (state.canResize === false && Boolean(input.closest?.("[data-display-size]")));
+       }
+       if (enabled && (this._displayControlGeneration !== state.generation ||
+@@ -1179,6 +1145,7 @@
+       tile.appendChild(content);
+       tile.appendChild(trailing);
+       this.content.appendChild(tile);
++      return tile;
+     }
+ 
+     _appendDescription(text) {
+diff --git a/css/app.css b/css/app.css
+index efefdb7..5afb24a 100644
+--- a/css/app.css
++++ b/css/app.css
+@@ -768,6 +768,12 @@
+     }
+ 
+     .rear-role-picker { display: flex; gap: 4px; min-width: 0; }
++    [data-display-role-tile] { grid-template-columns: 34px minmax(0, 1fr); }
++    [data-display-role-tile] .settings-tile-trailing {
++      grid-column: 2; justify-content: flex-start; min-width: 0;
++    }
++    [data-display-role-tile] .rear-role-picker { flex-wrap: wrap; }
++    [data-display-role-tile] .rear-role-picker span { font-size: 18px; }
+     .rear-role-picker label { position: relative; min-width: 0; }
+     .rear-role-picker input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+     .rear-role-picker span {
+@@ -961,18 +967,33 @@
+     }
+ 
+     @media (max-width: 480px) {
++      [data-vm-display-controls] .settings-tile {
++        grid-template-columns: 34px minmax(0, 1fr); row-gap: 4px;
++      }
++      [data-vm-display-controls] .settings-tile-content,
++      [data-vm-display-controls] .settings-tile-trailing { min-width: 0; }
++      [data-vm-display-controls] .settings-tile-content { grid-column: 2; grid-row: 1; }
++      [data-vm-display-controls] .settings-tile-trailing {
++        grid-column: 2; grid-row: 2; justify-content: flex-start;
++      }
++      [data-vm-device-info] .settings-tile-wide,
+       [data-vm-network-info] .settings-tile-wide {
+         grid-template-columns: 34px minmax(0, 1fr);
+         row-gap: 4px;
+       }
++      [data-vm-device-info] .settings-tile-leading,
+       [data-vm-network-info] .settings-tile-leading { grid-row: 1 / span 2; }
++      [data-vm-device-info] .settings-tile-content,
+       [data-vm-network-info] .settings-tile-content { grid-column: 2; grid-row: 1; }
++      [data-vm-device-info] .settings-tile-trailing,
+       [data-vm-network-info] .settings-tile-trailing {
+         grid-column: 2;
+         grid-row: 2;
+         justify-content: flex-start;
+         text-align: left;
+       }
++      [data-vm-device-info] .settings-trailing-text,
++      [data-vm-network-info] .settings-trailing-text { text-align: left; }
+     }
+ 
+     @media (max-width: 1100px) {

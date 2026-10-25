@@ -1,0 +1,25 @@
+[Unit]
+Description=DroidDeck browser connection metadata helper
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /opt/teslaandroid-waydroid/runtime/browser-connection/helper.js
+User=root
+Group=1000
+RuntimeDirectory=droiddeck-connection
+RuntimeDirectoryMode=0750
+UMask=0077
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/teslaandroid-waydroid/browser-connection /run/droiddeck-connection
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

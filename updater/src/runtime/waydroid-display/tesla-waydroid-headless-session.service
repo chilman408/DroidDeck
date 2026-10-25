@@ -1,0 +1,30 @@
+[Unit]
+Description=TeslaAndroid unprivileged headless Android session
+Requires=user@1000.service tesla-waydroid-compositor.service
+Wants=waydroid-container.service
+After=user@1000.service tesla-waydroid-compositor.service waydroid-container.service
+PartOf=waydroid-container.service tesla-waydroid-compositor.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=hilman
+Group=hilman
+Environment=HOME=/home/hilman
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+Environment=WAYLAND_DISPLAY=wayland-teslaandroid
+Environment=LD_LIBRARY_PATH=/opt/teslaandroid-waydroid/libgbinder
+ExecStartPre=/usr/bin/node /opt/teslaandroid-waydroid/runtime/waydroid-display/headless-session-preflight.js
+ExecStart=/usr/bin/waydroid show-full-ui
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGUSR1
+KillMode=control-group
+TimeoutStartSec=30s
+TimeoutStopSec=45s
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

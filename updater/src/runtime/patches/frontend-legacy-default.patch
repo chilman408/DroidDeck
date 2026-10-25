@@ -1,0 +1,14 @@
+diff --git a/js/display/display-renderer-manager.js b/js/display/display-renderer-manager.js
+index 0d4335d..c59257c 100644
+--- a/js/display/display-renderer-manager.js
++++ b/js/display/display-renderer-manager.js
+@@ -22,7 +22,8 @@
+     effectiveChoice() {
+       const value = this.choice();
+       if (value === "auto") {
+-        try { if (global.sessionStorage.getItem(recoveryKey) === "legacy") return "legacy"; } catch {}
++        // API presence is not playback proof; legacy is the accepted vehicle path.
++        return "legacy";
+       }
+       return value;
+     },

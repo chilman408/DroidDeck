@@ -1,0 +1,28 @@
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+index 8d48c42..b31894d 100644
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -10,11 +10,20 @@
+         !Number.isInteger(preset) || preset < 0 || preset > 4) return null;
+     const source = dynamic ? area : committed;
+     if (!source || ![source.width, source.height].every(v => Number.isFinite(v) && v > 0)) return null;
+-    const scale = Math.min(dynamic ? 1 : Infinity, area.width / source.width, area.height / source.height,
++    let scale = Math.min(dynamic ? 1 : Infinity, area.width / source.width, area.height / source.height,
+       1920 / source.width, 1920 / source.height, Math.sqrt(1600000 / (source.width * source.height)),
+       [832, 720, 640, 544, 480][preset] / Math.min(source.width, source.height));
+-    let width = Math.min(1920, Math.floor(area.width / 2) * 2, Math.round(source.width * scale / 2) * 2);
+-    let height = Math.min(1920, Math.floor(area.height / 2) * 2, Math.round(source.height * scale / 2) * 2);
++    // The pinned natural-landscape Android image clips its phone navigation bar.
++    // Use its working tablet layout without changing density or viewport aspect.
++    const minimum = committed?.landscapeNavigationMinHeight;
++    const navigationFloor = source.width > source.height && minimum === 676 &&
++      minimum / source.height <= Math.min(1920 / source.width, 1920 / source.height,
++        Math.sqrt(1600000 / (source.width * source.height)));
++    if (navigationFloor) scale = Math.max(scale, minimum / source.height);
++    let width = Math.min(1920, navigationFloor ? Infinity : Math.floor(area.width / 2) * 2,
++      Math.round(source.width * scale / 2) * 2);
++    let height = Math.min(1920, navigationFloor ? Infinity : Math.floor(area.height / 2) * 2,
++      Math.round(source.height * scale / 2) * 2);
+     while (width * height > 1600000) { if (width >= height) width -= 2; else height -= 2; }
+     return width >= 96 && height >= 96 ? { width, height } : null;
+   }

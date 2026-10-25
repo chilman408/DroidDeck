@@ -1,0 +1,17 @@
+[Unit]
+Description=DroidDeck original-owned GPU activation %i
+Requires=droiddeck-fresh-gpu-watch@%i.service
+BindsTo=droiddeck-fresh-gpu-watch@%i.service
+After=droiddeck-fresh-gpu-watch@%i.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/
+ExecStart=/usr/bin/python3 -B /var/lib/droiddeck/gpu-recovery/runtime/portable/fresh-gpu.py --activate %i
+Restart=no
+KillMode=control-group
+TimeoutStartSec=450s
+TimeoutStopSec=70s
+UMask=0077

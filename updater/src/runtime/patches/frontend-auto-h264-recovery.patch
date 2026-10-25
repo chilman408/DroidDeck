@@ -1,0 +1,123 @@
+diff --git a/js/display/display-renderer-manager.js b/js/display/display-renderer-manager.js
+index e3d1f13..0d4335d 100644
+--- a/js/display/display-renderer-manager.js
++++ b/js/display/display-renderer-manager.js
+@@ -5,6 +5,8 @@
+   const utils = TAHtml.utils;
+ 
+   const rendererKey = "TeslaAndroid_browserH264Renderer_v1";
++  const recoveryKey = "TeslaAndroid_autoH264Fallback_v1";
++  let rendererRecoveryPending = false;
+   const rendererChoices = ["auto", "webcodecs", "legacy"];
+   const hasWebCodecs = () => global.isSecureContext && typeof global.VideoDecoder === "function";
+   TAHtml.browserRenderer = {
+@@ -17,6 +19,30 @@
+       if (!rendererChoices.includes(value) || (value === "webcodecs" && !hasWebCodecs())) return "auto";
+       return value;
+     },
++    effectiveChoice() {
++      const value = this.choice();
++      if (value === "auto") {
++        try { if (global.sessionStorage.getItem(recoveryKey) === "legacy") return "legacy"; } catch {}
++      }
++      return value;
++    },
++    recover() {
++      if (rendererRecoveryPending) return true;
++      if (this.choice() !== "auto" || this.effectiveChoice() === "legacy") return false;
++      rendererRecoveryPending = true;
++      // OffscreenCanvas cannot be transferred twice; one browser reload switches decoders.
++      try {
++        global.sessionStorage.setItem(recoveryKey, "legacy");
++        if (global.sessionStorage.getItem(recoveryKey) !== "legacy") throw new Error("Storage unavailable");
++        global.location.reload();
++      } catch {
++        // A URL override prevents a reload loop even when browser storage is blocked.
++        const url = new URL(global.location.href);
++        url.searchParams.set("video", "legacy");
++        global.location.replace(url.href);
++      }
++      return true;
++    },
+     options() {
+       return [{ value: "auto", label: "Automatic" },
+         ...(hasWebCodecs() ? [{ value: "webcodecs", label: "h264 (WebCodecs)" }] : []),
+@@ -28,6 +54,8 @@
+       }
+       // Decoder scripts own the OffscreenCanvas; reload only this browser to switch.
+       global.localStorage.setItem(rendererKey, value);
++      try { global.sessionStorage.removeItem(recoveryKey); } catch {}
++      rendererRecoveryPending = false;
+       const url = new URL(global.location.href);
+       url.searchParams.delete("video");
+       if (url.href !== global.location.href) global.history.replaceState(global.history.state, "", url.href);
+@@ -216,7 +244,7 @@
+         if (!canvas || typeof canvas.transferControlToOffscreen !== "function") {
+           throw new Error("H264 canvas rendering is unavailable in this browser");
+         }
+-        const useWebCodecs = TAHtml.browserRenderer.choice() !== "legacy" && hasWebCodecs();
++        const useWebCodecs = TAHtml.browserRenderer.effectiveChoice() !== "legacy" && hasWebCodecs();
+         return { id: useWebCodecs ? 1 : 2, packetFormat: "scrcpy",
+           scriptPath: useWebCodecs ? "./js/display/renderers/h264-webcodecs/h264WebCodecs.js" :
+             "./js/display/renderers/h264-broadway/h264Brodway.js",
+diff --git a/js/display/renderers/h264-webcodecs/h264WebCodecs.js b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+index ce6e47a..db3873a 100644
+--- a/js/display/renderers/h264-webcodecs/h264WebCodecs.js
++++ b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+@@ -134,6 +134,19 @@ window.addEventListener("resize", function () {
+ var videoWatchdog = null;
+ var videoRecoveryTimer = null;
+ var videoRecoveryPending = false;
++var videoPacketsReceived = false;
++function recoverVideoDecoder(reason) {
++  var policy = window.TAHtml && window.TAHtml.browserRenderer;
++  if (window.TAHtmlVideoPacketFormat === "scrcpy" && policy && typeof policy.recover === "function" && policy.recover()) {
++    clearTimeout(videoWatchdog);
++    videoWatchdog = null;
++    clearTimeout(videoRecoveryTimer);
++    videoRecoveryTimer = null;
++    canvas.dataset.videoState = "recovering-legacy";
++    return;
++  }
++  reconnectVideoStream(reason);
++}
+ function reconnectVideoStream(reason) {
+   if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
+   clearTimeout(videoWatchdog);
+@@ -152,11 +165,15 @@ function watchVideoFrames() {
+   if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
+   if (videoWatchdog !== null) return;
+   // A verified logical resize may occupy the full 20-second transaction budget.
+-  videoWatchdog = setTimeout(function () { reconnectVideoStream("No decoded output"); }, 30000);
++  videoWatchdog = setTimeout(function () {
++    // Only a startup with incoming packets establishes a stalled decoder.
++    if (videoPacketsReceived && !Number(canvas.dataset.videoFrames || 0)) recoverVideoDecoder("No decoded output");
++    else reconnectVideoStream("No decoded output");
++  }, 30000);
+ }
+ if (worker) {
+   worker.onmessage = function (event) {
+-    if (event.data.error) { reconnectVideoStream(event.data.error); return; }
++    if (event.data.error) { recoverVideoDecoder(event.data.error); return; }
+     if (event.data.frameRendered) {
+       canvas.dataset.videoFrames = String(Number(canvas.dataset.videoFrames || 0) + 1);
+       canvas.dataset.videoWidth = String(event.data.width);
+@@ -171,8 +188,9 @@ if (worker) {
+       }
+     }
+   };
+-  worker.onerror = reconnectVideoStream;
++  worker.onerror = recoverVideoDecoder;
+ }
++if (!worker) setTimeout(function () { recoverVideoDecoder("Worker unavailable"); }, 0);
+ watchVideoFrames();
+ 
+ window.addEventListener("beforeunload", function () {
+@@ -200,6 +218,7 @@ function drawDisplayFrame(arrayBuffer) {
+         watchVideoFrames();
+       } catch (_error) { reconnectVideoStream("Invalid stream metadata"); }
+     } else if (arrayBuffer instanceof ArrayBuffer) {
++      videoPacketsReceived = true;
+       watchVideoFrames();
+       worker.postMessage({ scrcpyPacket: arrayBuffer }, [arrayBuffer]);
+     }

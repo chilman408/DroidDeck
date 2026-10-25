@@ -1,0 +1,26 @@
+diff --git a/js/core/shared.js b/js/core/shared.js
+--- a/js/core/shared.js
++++ b/js/core/shared.js
+@@ -52,12 +52,16 @@
+   };
+ 
+   TAHtml.createFlavor = function createFlavor() {
++    const origin = global.location.origin;
++    const wsScheme = global.location.protocol === "https:" ? "wss:" : "ws:";
++    const wsOrigin = wsScheme + "//" + global.location.host;
++
+     return {
+-      domain: "device.teslaandroid.com",
+-      apiBaseUrl: "https://device.teslaandroid.com/api",
+-      audioWebSocket: "wss://device.teslaandroid.com/sockets/audio",
+-      displayWebSocket: "wss://device.teslaandroid.com/sockets/display",
+-      gpsWebSocket: "wss://device.teslaandroid.com/sockets/gps",
+-      touchscreenWebSocket: "wss://device.teslaandroid.com/sockets/touchscreen",
++      domain: global.location.hostname,
++      apiBaseUrl: origin + "/api",
++      audioWebSocket: wsOrigin + "/sockets/audio",
++      displayWebSocket: wsOrigin + "/sockets/display",
++      gpsWebSocket: wsOrigin + "/sockets/gps",
++      touchscreenWebSocket: wsOrigin + "/sockets/touchscreen",
+     };
+   };

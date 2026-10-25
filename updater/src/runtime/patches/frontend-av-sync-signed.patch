@@ -1,0 +1,182 @@
+diff --git a/js/audio/audioplayback.js b/js/audio/audioplayback.js
+index f5f85ae..b58bdfb 100644
+--- a/js/audio/audioplayback.js
++++ b/js/audio/audioplayback.js
+@@ -14,12 +14,52 @@
+   let delayedStartPending = false;
+   let delayedStartPaused = false;
+   let delayedStartTimer = null;
+-  const validDelay = value => Number.isInteger(value) && value >= 0 && value <= 750 && value % 25 === 0;
++  const validDelay = value => Number.isInteger(value) && value >= -750 && value <= 750 && value % 25 === 0;
+   try {
+     const saved = Number(window.localStorage?.getItem(AUDIO_DELAY_KEY));
+     if (validDelay(saved)) audioDelayMs = saved;
+   } catch (_) {}
+ 
++  // Hold encoded video, not decoded surfaces, when audio must lead the picture.
++  window.createAVSyncVideoQueue = function(deliver, overflow) {
++    let queue = [], bytes = 0, timer = null, generation = 0, closed = false, blocked = false;
++    let delay = Math.max(0, -audioDelayMs);
++    const now = () => performance.now();
++    function cancel() { generation++; clearTimeout(timer); timer = null; }
++    function drain() {
++      cancel();
++      if (closed || blocked) return;
++      while (queue.length && queue[0].due <= now()) {
++        const item = queue.shift(); bytes -= item.packet.byteLength; deliver(item.packet);
++        if (closed || blocked) return;
++      }
++      if (queue.length) {
++        const current = generation;
++        timer = setTimeout(() => { if (current === generation) drain(); }, Math.max(0, queue[0].due - now()));
++      }
++    }
++    function changed() {
++      const next = Math.max(0, -audioDelayMs), delta = next - delay;
++      delay = next; for (const item of queue) item.due += delta;
++      drain();
++    }
++    window.addEventListener?.('ta-audio-sync-change', changed);
++    return {
++      push(packet) {
++        if (closed || blocked) return;
++        if (!delay && !queue.length) { deliver(packet); return; }
++        // Room for the relay's complete cached GOP plus codec configuration.
++        if (queue.length >= 128 || bytes + packet.byteLength > 2306868) {
++          cancel(); queue = []; bytes = 0; blocked = true; overflow(); return;
++        }
++        queue.push({ packet, due: now() + delay }); bytes += packet.byteLength;
++        drain();
++      },
++      reset() { cancel(); queue = []; bytes = 0; blocked = false; },
++      close() { this.reset(); closed = true; window.removeEventListener?.('ta-audio-sync-change', changed); },
++    };
++  };
++
+   let isAudioEnabled = true;
+   let audioVolume = 1.0;
+ 
+@@ -56,9 +96,11 @@
+   window.setAudioDelayMs = function(value) {
+     if (!validDelay(value)) throw new RangeError('Invalid audio delay');
+     if (value === audioDelayMs) return value;
++    const previousAudioDelay = Math.max(0, audioDelayMs);
+     audioDelayMs = value;
+     try { window.localStorage?.setItem(AUDIO_DELAY_KEY, String(value)); } catch (_) {}
+-    if (started) { window.stopAudioPlayback(); window.startAudioPlayback(); }
++    if (typeof CustomEvent === 'function') window.dispatchEvent?.(new CustomEvent('ta-audio-sync-change'));
++    if (started && previousAudioDelay !== Math.max(0, value)) { window.stopAudioPlayback(); window.startAudioPlayback(); }
+     return value;
+   };
+ 
+@@ -292,7 +334,7 @@
+   function maybeReduceLatency() {
+     if (!sourceBuffer || sourceBuffer.updating || !audioEl || delayedStartPending) return;
+     const remain = getBufferedRemain();
+-    const extraDelay = audioDelayMs / 1000;
++    const extraDelay = Math.max(0, audioDelayMs) / 1000;
+     if (remain > MAX_LATENCY_SEC + extraDelay) {
+       const b = sourceBuffer.buffered;
+       if (!b || b.length === 0) return;
+diff --git a/js/settings/settings-controller.js b/js/settings/settings-controller.js
+index 34d1a29..2a439c7 100644
+--- a/js/settings/settings-controller.js
++++ b/js/settings/settings-controller.js
+@@ -631,10 +631,10 @@
+           const delayWrap = utils.createElement("div", "settings-volume-wrap", null);
+           const delayValue = utils.createElement("span", "settings-volume-value", String(global.getAudioDelayMs()) + " ms");
+           const delay = utils.createElement("input", "settings-audio-delay-slider", null);
+-          delay.type = "range"; delay.min = "0"; delay.max = "750"; delay.step = "25";
++          delay.type = "range"; delay.min = "-750"; delay.max = "750"; delay.step = "25";
+           delay.style.width = "180px"; delay.style.accentColor = "var(--accent)";
+           delay.value = String(global.getAudioDelayMs()); delay.dataset.localAudioDelay = "true";
+-          delay.setAttribute("aria-label", "Audio delay");
++          delay.setAttribute("aria-label", "A/V sync");
+           delay.addEventListener("input", () => { delayValue.textContent = String(delay.value) + " ms"; });
+           delay.addEventListener("change", () => {
+             if (token !== this._renderToken || this.activeSectionId !== "audio") return;
+@@ -642,7 +642,7 @@
+             delay.value = String(global.getAudioDelayMs()); delayValue.textContent = delay.value + " ms";
+           });
+           delayWrap.appendChild(delayValue); delayWrap.appendChild(delay);
+-          this._appendTile({ icon: "av_timer", title: "Audio delay", trailing: delayWrap, dense: false });
++          this._appendTile({ icon: "av_timer", title: "A/V sync", trailing: delayWrap, dense: false });
+         }
+ 
+       if (this.apiClient.browserAudioSupported) this.refreshDisplayControl(this.displayController.remoteDisplayState);
+diff --git a/js/display/renderers/h264-broadway/h264Brodway.js b/js/display/renderers/h264-broadway/h264Brodway.js
+index f73f6c3..f6a6489 100644
+--- a/js/display/renderers/h264-broadway/h264Brodway.js
++++ b/js/display/renderers/h264-broadway/h264Brodway.js
+@@ -173,6 +173,7 @@ if (worker) {
+ }
+ 
+ window.addEventListener("beforeunload", function () {
++  syncVideoQueue?.close();
+   if (worker && worker.__blobUrl) {
+     URL.revokeObjectURL(worker.__blobUrl);
+   }
+@@ -207,6 +208,7 @@ function drainLegacyQueue() {
+ function failLegacyWorker(state) {
+   if (legacyFailed) return;
+   legacyFailed = true; legacyWorkerReady = false;
++  syncVideoQueue?.close();
+   legacyQueue = []; legacyQueueBytes = 0; legacyPendingReset = null;
+   legacyInFlight.forEach(function (timer) { clearTimeout(timer); }); legacyInFlight.clear();
+   worker?.terminate(); canvas.dataset.videoState = state;
+@@ -221,7 +223,19 @@ function failLegacyWorker(state) {
+ if (typeof setTimeout === "function") setTimeout(function () {
+   if (!legacyWorkerReady) failLegacyWorker("worker-protocol-error");
+ }, 5000);
++var syncVideoQueue = typeof window.createAVSyncVideoQueue === "function" ? window.createAVSyncVideoQueue(
++  consumeDisplayFrame, function () {
++    if (typeof window.requestDisplayStreamReconnect === "function") window.requestDisplayStreamReconnect();
++  }) : null;
+ function drawDisplayFrame(arrayBuffer) {
++  if (window.TAHtmlVideoPacketFormat === "scrcpy" && syncVideoQueue) {
++    if (typeof arrayBuffer === "string") { syncVideoQueue.reset(); consumeDisplayFrame(arrayBuffer); }
++    else if (arrayBuffer instanceof ArrayBuffer) syncVideoQueue.push(arrayBuffer);
++    return;
++  }
++  consumeDisplayFrame(arrayBuffer);
++}
++function consumeDisplayFrame(arrayBuffer) {
+   if (!worker || legacyFailed) {
+     return;
+   }
+diff --git a/js/display/renderers/h264-webcodecs/h264WebCodecs.js b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+index db3873a..09ebcd1 100644
+--- a/js/display/renderers/h264-webcodecs/h264WebCodecs.js
++++ b/js/display/renderers/h264-webcodecs/h264WebCodecs.js
+@@ -149,6 +149,7 @@ function recoverVideoDecoder(reason) {
+ }
+ function reconnectVideoStream(reason) {
+   if (window.TAHtmlVideoPacketFormat !== "scrcpy") return;
++  syncVideoQueue?.reset();
+   clearTimeout(videoWatchdog);
+   videoWatchdog = null;
+   videoRecoveryPending = true;
+@@ -194,12 +195,23 @@ if (!worker) setTimeout(function () { recoverVideoDecoder("Worker unavailable");
+ watchVideoFrames();
+ 
+ window.addEventListener("beforeunload", function () {
++  syncVideoQueue?.close();
+   if (worker && worker.__blobUrl) {
+     URL.revokeObjectURL(worker.__blobUrl);
+   }
+ });
+ 
++var syncVideoQueue = typeof window.createAVSyncVideoQueue === "function" ? window.createAVSyncVideoQueue(
++  consumeDisplayFrame, function () { reconnectVideoStream("A/V sync queue overflow"); }) : null;
+ function drawDisplayFrame(arrayBuffer) {
++  if (window.TAHtmlVideoPacketFormat === "scrcpy" && syncVideoQueue) {
++    if (typeof arrayBuffer === "string") { syncVideoQueue.reset(); consumeDisplayFrame(arrayBuffer); }
++    else if (arrayBuffer instanceof ArrayBuffer) syncVideoQueue.push(arrayBuffer);
++    return;
++  }
++  consumeDisplayFrame(arrayBuffer);
++}
++function consumeDisplayFrame(arrayBuffer) {
+   if (!worker) {
+     return;
+   }

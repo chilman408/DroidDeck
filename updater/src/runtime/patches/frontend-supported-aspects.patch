@@ -1,0 +1,44 @@
+diff --git a/js/display/display-controller.js b/js/display/display-controller.js
+--- a/js/display/display-controller.js
++++ b/js/display/display-controller.js
+@@ -5,7 +5,34 @@
+   const utils = TAHtml.utils;
+   const constants = TAHtml.constants;
+ 
++  const dynamicAspectRatios = [[4, 3], [1, 1], [16, 9], [9, 16], [3, 4]];
++
++  function supportedDynamicSize(area, preset, committed) {
++    let selected = null, bestCoverage = -1;
++    for (const [a, b] of dynamicAspectRatios) {
++      const fit = Math.min(area.width / a, area.height / b);
++      const coverage = fit * fit * a * b;
++      // Integer multiples retain the exact ratio and even H264 dimensions.
++      const unitWidth = a * 2, unitHeight = b * 2;
++      const hardCap = Math.floor(Math.min(1920 / unitWidth, 1920 / unitHeight,
++        Math.sqrt(1600000 / (unitWidth * unitHeight))));
++      let units = Math.floor(Math.min(hardCap, area.width / unitWidth, area.height / unitHeight,
++        [832, 720, 640, 544, 480][preset] / Math.min(unitWidth, unitHeight)));
++      // Preserve the pinned image's working landscape navigation layout.
++      if (a > b && committed?.landscapeNavigationMinHeight === 676) {
++        const floor = Math.ceil(676 / unitHeight);
++        if (floor <= hardCap) units = Math.max(units, floor);
++      }
++      const width = unitWidth * units, height = unitHeight * units;
++      if (width >= 96 && height >= 96 && coverage > bestCoverage) {
++        selected = { width, height }; bestCoverage = coverage;
++      }
++    }
++    return selected;
++  }
++
+   function calculateDynamicSize(area, preset, committed, dynamic) {
+     if (!area || ![area.width, area.height].every(v => Number.isFinite(v) && v >= 96) ||
+         !Number.isInteger(preset) || preset < 0 || preset > 4) return null;
++    if (dynamic) return supportedDynamicSize(area, preset, committed);
+     const source = dynamic ? area : committed;
+@@ -224,3 +251,4 @@
+         const draft = { ...state }; mutator(draft);
+-        const size = calculateDynamicSize(this.display.viewSize, draft.resolutionPreset, state, false);
++        const size = calculateDynamicSize(this.display.viewSize, draft.resolutionPreset, state,
++          draft.isResponsive === 1);
+         if (!size) throw new Error("Display area is too small");

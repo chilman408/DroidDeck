@@ -1,0 +1,22 @@
+[Unit]
+Description=TeslaAndroid Waydroid runtime supervisor
+After=network-online.target waydroid-container.service
+Wants=network-online.target waydroid-container.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+Environment=NODE_PATH=/opt/teslaandroid-waydroid/runtime/preview-gateway/node_modules:/opt/teslaandroid-waydroid/runtime/waydroid-display/node_modules
+Environment=LD_LIBRARY_PATH=/opt/teslaandroid-waydroid/libgbinder
+WorkingDirectory=/opt/teslaandroid-waydroid/runtime/waydroid-display
+ExecStart=/usr/bin/node /opt/teslaandroid-waydroid/runtime/waydroid-display/runtime-main.js
+Restart=on-failure
+RestartSec=2s
+KillMode=control-group
+TimeoutStopSec=900s
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
