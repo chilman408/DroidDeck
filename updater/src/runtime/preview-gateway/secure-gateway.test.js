@@ -106,7 +106,7 @@ test('static release identity needs no login but exposes no protected API or acc
   const version = await request('/api/runtimeRelease', { Authorization: '' });
   assert.equal(version.status, 200);
   assert.equal(version.headers['cache-control'], 'no-store');
-  assert.deepEqual(JSON.parse(version.body), { kind: 'droiddeck-runtime-release', version: '0.1.1-rc.7', updateProtocol: 1 });
+  assert.deepEqual(JSON.parse(version.body), { kind: 'droiddeck-runtime-release', version: require('./release-version.json').version, updateProtocol: 1 });
   assert.equal((await request('/api/runtimeRelease', { Authorization: '', Host: 'attacker.test' })).status, 403);
   assert.equal((await request('/api/runtimeRelease', { Authorization: '', Origin: 'https://attacker.test' })).status, 403);
   assert.equal((await request('/', { Authorization: '' })).status, 401);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Real browser-local choices only; block Android/settings writes, keep pixels in RAM.
-const assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto');
+const assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto'),https=require('node:https');
 const {chromium}=require('../runtime/preview-gateway/node_modules/playwright-core');
 const {PNG}=require('../runtime/waydroid-display/node_modules/pngjs');
 async function main([origin,cert='-',candidate]) {
@@ -11,12 +11,23 @@ async function main([origin,cert='-',candidate]) {
  }
  const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true,args});
  try {
-  const page=await browser.newPage(),errors=[];let writes=0;
+  const page=await browser.newPage(),errors=[],blockedPaths=[];let writes=0;
   page.on('pageerror',e=>errors.push(e.name));
   await page.addInitScript(()=>{for(const key of ['DisplayRepository_isPrimaryDisplaySharedPreferencesKey','flutter.DisplayRepository_isPrimaryDisplaySharedPreferencesKey'])localStorage.setItem(key,'true');});
-  await page.route('**/api/**',route=>{
+  await page.route('**/api/**',async route=>{
    const req=route.request(),path=new URL(req.url()).pathname;
-   if(req.method()!=='GET'&&!['/api/displaySession','/api/displayRole'].includes(path)){writes++;return route.abort();}
+   if(req.method()==='GET'&&path==='/api/displayState'){
+    try {
+     const state=await new Promise((resolve,reject)=>{
+      const request=https.get(req.url(),{...(cert!=='-'?{ca:fs.readFileSync(cert)}:{}),headers:req.headers(),timeout:5000},response=>{
+       let body='';response.on('data',chunk=>{body+=chunk;if(body.length>65536)request.destroy(new Error('Bounded display state required'));});
+       response.on('end',()=>{try{if(response.statusCode!==200)throw new Error('Display state unavailable');resolve(JSON.parse(body));}catch{reject(new Error('Display state unavailable'));}});
+      });request.on('timeout',()=>request.destroy(new Error('Display state timeout')));request.on('error',()=>reject(new Error('Pinned display state request failed')));
+     });
+     return route.fulfill({status:200,contentType:'application/json',json:{...state,canControl:false,canResize:false}});
+    } catch {return route.abort();}
+   }
+   if(req.method()!=='GET'&&!['/api/displaySession','/api/displayRole'].includes(path)){writes++;blockedPaths.push(path);return route.abort();}
    return route.continue();
   });
   if(candidate)for(const [asset,file]of [['/js/display/display-renderer-manager.js','manager'],['/js/settings/settings-controller.js','settings']]) {
@@ -43,7 +54,7 @@ async function main([origin,cert='-',candidate]) {
   const initial=await picture('legacy');await choose('H264 (WebCodecs)');const webcodecs=await picture('webcodecs');
   assert.equal(await page.evaluate(()=>localStorage.getItem('TeslaAndroid_browserH264Renderer_v1')),'webcodecs');
   await choose('H264 (Legacy)');const legacy=await picture('legacy');
-  assert.equal(writes,0);assert.deepEqual(errors,[]);
+  assert.equal(writes,0,JSON.stringify({blockedPaths}));assert.deepEqual(errors,[]);
   console.log(JSON.stringify({initial,webcodecs,legacy,settingsRowVisible:true,browserPreferencePersisted:true,globalWrites:writes,pageErrors:errors,screenshotsSaved:false,mediaSaved:false}));
  }finally{await browser.close();}
 }

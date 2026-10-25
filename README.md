@@ -6,17 +6,23 @@ Android streamed to your browser from an Ubuntu virtual machine.
 
 ## Pilot Release
 
-**Already running 0.1.0-rc.2?** The signed **0.1.1-rc.7 updater** installs from
-one file and preserves your Android apps, accounts, settings and HTTPS identity.
-See [update and rollback instructions](UPDATE.md). It includes independent reboot
-recovery; later signed gateway updates use the same command without reinstalling
-Android. [Pilot releases](https://github.com/chilman408/DroidDeck/releases).
+**Already running 0.1.0-rc.2 or an older signed gateway update?** The signed
+**0.1.1-rc.11 updater** adds **Settings → Updates**. Install the signed updater
+once, then use the browser to check for pilot releases, install updates, follow
+progress and request rollback. Android apps, accounts, settings and HTTPS identity
+are preserved. See [update and rollback instructions](UPDATE.md) and
+[pilot releases](https://github.com/chilman408/DroidDeck/releases).
+See the [exact pilot acceptance record](updater/ACCEPTANCE.json).
 
-RC7 preserves native GPU supervision: an idle touch stream does not disable GPU
-rendering. See the [GPU guard review and regression tests](docs/GPU-GUARD.md).
-RC7 restores Settings → Display → Renderer with H264 (WebCodecs) and H264 (Legacy).
-It includes the Tesla-tested AUD compatibility fix, keeps legacy as the default,
-and recovers to legacy if native decoding fails. See [browser compatibility](docs/BROWSER-RENDERER.md).
+Updates use the existing release-signing authority and original recovery engine.
+The update helper runs independently of the stream, so browser disconnects do not
+cancel an accepted operation. Updates require the primary display's permissions.
+This is a gateway update; use the separate RC2 clean installer below for a new VM.
+
+Includes the native GPU supervision and Tesla-tested WebCodecs compatibility fixes.
+Settings → Display → Renderer offers H264 (WebCodecs) and H264 (Legacy), with
+legacy as the Automatic default. See [GPU guard details](docs/GPU-GUARD.md) and
+[browser compatibility](docs/BROWSER-RENDERER.md).
 
 **0.1.0-rc.2 is an early technical pilot with the reboot fix integrated.**
 New installations use one source installer and one installation command. No

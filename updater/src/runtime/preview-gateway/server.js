@@ -60,7 +60,7 @@ function readProxyOrigin(filename) {
   return validateProxyOrigin(fs.readFileSync(filename, "utf8").trim());
 }
 
-function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, proxyOrigin, auth, tls, accessFile, displayControl, audioSettings, gpsControl, videoSettings, connectionControl, audioPcmGain = false, deviceInfoProvider, retireTouch } = {}) {
+function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, proxyOrigin, auth, tls, accessFile, displayControl, audioSettings, gpsControl, videoSettings, connectionControl, updateControl, audioPcmGain = false, deviceInfoProvider, retireTouch } = {}) {
   proxyOrigin = validateProxyOrigin(proxyOrigin);
   if (proxyOrigin && !publicOrigin) throw new Error("Proxy origin requires a primary HTTPS gateway");
   if (!frontendDir || !fs.statSync(path.join(frontendDir, "index.html"), { throwIfNoEntry: true }).isFile()) {
@@ -175,6 +175,38 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       return;
     }
     const pathname = new URL(req.url, `http://${host}`).pathname;
+    let decodedUpdatePath;
+    try { decodedUpdatePath = decodeURIComponent(pathname); } catch { res.writeHead(400).end(); return; }
+    if (decodedUpdatePath === '/api/updates') {
+      res.setHeader('Content-Type', 'application/json');
+      if (pathname !== '/api/updates' || req.url !== pathname) { res.writeHead(400).end(); return; }
+      if (!updateControl || !displayControl) { res.writeHead(503).end(JSON.stringify({ error: 'Updates unavailable' })); return; }
+      try {
+        if (req.headers.origin && req.headers.origin !== originFor(host)) throw Object.assign(new Error('Foreign Origin'), { status: 403 });
+        if (req.method === 'GET') {
+          displayControl.snapshot(req.headers['x-display-session']);
+          res.end(JSON.stringify(await updateControl.request({ action: 'status' }))); return;
+        }
+        if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); res.writeHead(405).end(); return; }
+        if (req.headers.origin !== originFor(host)) throw Object.assign(new Error('Origin required'), { status: 403 });
+        if (req.headers['content-type'] !== 'application/json') { res.writeHead(415).end(); return; }
+        const owner = () => displayControl.assertOwner(req.headers['x-display-session'], req.headers['x-display-csrf']);
+        owner(); const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > 512) { res.writeHead(413).end(); return; } chunks.push(chunk); }
+        owner();
+        if (access && generation !== access.snapshot().csrfToken) throw Object.assign(new Error('Access changed'), { status: 403 });
+        let payload;
+        try { payload = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); }
+        const action = payload?.action;
+        const keys = payload && Object.keys(payload).sort().join(',');
+        if (!['check', 'install', 'rollback'].includes(action) || keys !== (action === 'check' ? 'action' : 'action,requestId,token') ||
+            action !== 'check' && (!/^[a-f0-9]{32}$/.test(payload.requestId) || !/^[a-f0-9]{32}(?:[a-f0-9]{32})?$/.test(payload.token))) {
+          throw Object.assign(new Error('Closed update action required'), { status: 400 });
+        }
+        res.end(JSON.stringify(await updateControl.request(payload)));
+      } catch (error) { res.writeHead([400, 403, 409].includes(error.status) ? error.status : 503).end(JSON.stringify({ error: 'Update request unavailable' })); }
+      return;
+    }
     if (deviceInfoProvider) {
       let decoded;
       try { decoded = decodeURIComponent(pathname); } catch { res.writeHead(400).end(); return; }
@@ -483,7 +515,9 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       // atomically with the gateway update. It never changes Android settings.
       const original = fs.readFileSync(path.join(frontendDir, decoded.slice(1)));
       const policy = fs.readFileSync(path.join(__dirname, browserPolicies[decoded]));
-      const body = Buffer.concat([original, Buffer.from('\n;\n'), policy]);
+      const updatePolicy = decoded === '/js/settings/settings-controller.js' ?
+        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js'))]) : Buffer.alloc(0);
+      const body = Buffer.concat([original, Buffer.from('\n;\n'), policy, updatePolicy]);
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Content-Length', body.length);
       res.end(req.method === 'HEAD' ? undefined : body);
@@ -700,7 +734,8 @@ async function main({ configuration, create = createGateway, args = process.argv
       connectionControl = require('../browser-connection/helper').createConnectionClient(connectionSocket);
       await connectionControl.initialize();
     }
-    const server = create({ frontendDir, publicOrigin, proxyOrigin, accessFile, tls, targets, displayControl, audioSettings, gpsControl, videoSettings, connectionControl, audioPcmGain, deviceInfoProvider,
+    const updateControl = configuration ? require('./update-client').createUpdateClient() : undefined;
+    const server = create({ frontendDir, publicOrigin, proxyOrigin, accessFile, tls, targets, displayControl, audioSettings, gpsControl, videoSettings, connectionControl, updateControl, audioPcmGain, deviceInfoProvider,
       ...(rearSettings ? { retireTouch: options => helper.retireTouch(options) } : {}) });
     retireAuthority = server.retireDisplayAuthority;
     server.listen(port, bindAddress, () => console.log(`TeslaAndroid x86 preview at ${publicOrigin || `http://127.0.0.1:${port}`}/`));
