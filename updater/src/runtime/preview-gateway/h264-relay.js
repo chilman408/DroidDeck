@@ -8,8 +8,23 @@ const SOCKET = "\0scrcpy_54410001";
 const FLOW_PROTOCOL = 'droiddeck-live-v1';
 const FLOW_WINDOW = 4, FLOW_BYTES = 512 * 1024;
 const FLOW_PENDING_BYTES = 2 * 1024 * 1024 + 256 * 1024 + 12;
-function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), reconnectMs = 500 } = {}) {
-  const server = http.createServer((_req, res) => res.writeHead(404).end());
+function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), reconnectMs = 500, clock = () => performance.now() } = {}) {
+  const server = http.createServer((req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method !== 'GET' || req.url !== '/flow-state') { res.writeHead(404).end(); return; }
+    const token = req.headers['x-droiddeck-display-session'];
+    if (!/^[a-f0-9]{64}$/.test(token || '')) { res.writeHead(403).end(); return; }
+    const clients = [...ws.clients].filter(client => client.readyState === WebSocket.OPEN && client.displaySession === token);
+    // Ambiguous overlapping reconnects and non-acknowledging clients cannot drive adaptation.
+    if (clients.length !== 1 || !clients[0].flow) { res.end(JSON.stringify({ available: false })); return; }
+    const client = clients[0];
+    const oldest = client.inflight.size ? Math.max(0, clock() - Math.min(...[...client.inflight.values()].map(value => value.sentAt))) : 0;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ available: true, flow: true, streamId: client.streamId,
+      ackedPackets: client.ackedPackets, acknowledgedBytes: client.acknowledgedBytes,
+      pendingBytes: client.pendingBytes, pendingFrames: client.pending.length,
+      oldestMs: Math.round(oldest), ackDelayMs: Math.round(client.ackDelayMs) }));
+  });
   const ws = new WebSocketServer({ server, maxPayload: 1024 });
   let source, retry, closing = false, session, config, replay = [], replayBytes = 0;
   function clearReplay() { replay = []; replayBytes = 0; }
@@ -25,7 +40,7 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
       client.pending.shift(); client.pendingBytes -= payload.length;
       if (payload === config) client.flowConfig = config;
       const id = ++client.flowSerial;
-      client.inflight.set(id, payload.length); client.inflightBytes += payload.length;
+      client.inflight.set(id, { bytes: payload.length, sentAt: clock() }); client.inflightBytes += payload.length;
       send(client, JSON.stringify({ type: 'scrcpy-flow-frame', id }));
       send(client, payload);
     }
@@ -80,7 +95,11 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
     current.on("data", bytes => { try { parser.push(bytes); } catch { failed(); } });
     current.once("error", failed); current.once("close", failed); current.once("end", failed);
   }
-  ws.on("connection", client => {
+  ws.on("connection", (client, req) => {
+    const token = req?.headers?.['x-droiddeck-display-session'];
+    client.displaySession = /^[a-f0-9]{64}$/.test(token || '') ? token : null;
+    client.streamId = require('node:crypto').randomBytes(8).toString('hex');
+    client.ackedPackets = 0; client.acknowledgedBytes = 0; client.ackDelayMs = 0;
     if (ws.clients.size > 4) { client.close(1013, "Video viewer limit"); return; }
     client.waitingKey = true;
     client.flow = client.protocol === FLOW_PROTOCOL;
@@ -102,7 +121,11 @@ function createVideoRelay({ connect = () => net.connect({ path: SOCKET }), recon
       if (!ack || Object.keys(ack).sort().join(',') !== 'id,type' || ack.type !== 'scrcpy-flow-ack' ||
           !Number.isSafeInteger(ack.id) || ack.id <= 0) { client.close(1008, "Video is read-only"); return; }
       if (!client.inflight.has(ack.id)) return;
-      client.inflightBytes -= client.inflight.get(ack.id); client.inflight.delete(ack.id); drainFlow(client);
+      const record = client.inflight.get(ack.id);
+      const latency = Math.max(0, clock() - record.sentAt);
+      client.ackDelayMs = client.ackedPackets ? client.ackDelayMs * .75 + latency * .25 : latency;
+      client.ackedPackets++; client.acknowledgedBytes += record.bytes;
+      client.inflightBytes -= record.bytes; client.inflight.delete(ack.id); drainFlow(client);
     });
     client.on("error", () => {});
   });

@@ -34,7 +34,7 @@ SOURCE_PREFIXES = ('runtime/', 'tools/', 'config/', 'tests/')
 SOURCE_SUFFIXES = {'.js', '.json', '.py', '.ps1', '.patch', '.sh', '.service', '.conf', '.md', '.txt',
                    '.java', '.c', '.cpp', '.h', '.bp', '.xml', '.axml', '.pam', '.example', '.svg', '.png', '.pl', '.swap'}
 GATEWAY = tuple(sorted((name + '.js' for name in (
-    'audio-gain audio-launcher audio-relay audio-settings audio-stream browser-access capture-layout capture-lease '
+    'adaptive-video browser-adaptive-policy audio-gain audio-launcher audio-relay audio-settings audio-stream browser-access capture-layout capture-lease '
     'browser-renderer-policy browser-settings-policy browser-update-policy update-client webcodecs-worker-policy compositor-video-launcher device-info display-control display-helper-client gps-control gps-helper-client '
     'gps-location h264-relay rear-display-settings runtime-probe scrcpy-stream server video-capture-controller '
     'video-launcher video-settings').split()))) + ('compositor-h264.py', 'package.json', 'package-lock.json')

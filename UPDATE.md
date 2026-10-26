@@ -1,4 +1,4 @@
-# Signed pilot update: 0.1.1-rc.11
+# Signed pilot update: 0.1.1-rc.12
 
 For an existing working RC2 installation or an older signed gateway candidate.
 This update preserves Android apps, accounts, configuration and HTTPS identity.
@@ -11,7 +11,7 @@ an existing signed-in Android setup. Require `release.json` acceptance before us
 
 ## Download and verify
 
-Download `droiddeck-0.1.1-rc.11-update.pyz` and `SHA256SUMS` from the official
+Download `droiddeck-0.1.1-rc.12-update.pyz` and `SHA256SUMS` from the official
 [DroidDeck pilot release](https://github.com/chilman408/DroidDeck/releases).
 The `.pyz` is the complete updater: it contains the payload, public source archive,
 release statement, detached signature and installer. It needs no separate hotfix.
@@ -20,7 +20,7 @@ Check the downloaded file against the release's published checksum:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-python3 -I -B ./droiddeck-0.1.1-rc.11-update.pyz verify
+python3 -I -B ./droiddeck-0.1.1-rc.12-update.pyz verify
 ```
 
 Require the updater file to report `OK`, followed by
@@ -51,7 +51,7 @@ or rebuild the baseline to make verification pass.
 Inside Ubuntu, run:
 
 ```sh
-sudo python3 -I -B ./droiddeck-0.1.1-rc.11-update.pyz \
+sudo python3 -I -B ./droiddeck-0.1.1-rc.12-update.pyz \
   install completed "$RC2_PACKAGE" --accept-existing-policy
 ```
 
@@ -97,6 +97,32 @@ to return to the newer interface. A rolled-back version is consumed and is not
 advertised for reinstallation. Do not delete its protected history.
 
 The command-line status/rollback interface below remains available for diagnosis.
+
+## Automatic quality
+
+In **Settings → Display**, select the desired bitrate and frame rate, then enable
+**Automatic quality**. It is off by default. These selections are upper limits.
+The shared encoder responds only to the current primary display's delivery
+feedback; a slow secondary viewer cannot lower quality for everyone.
+
+Sustained congestion lowers bitrate one step at a time, no more often than once
+per 12 seconds. At the minimum bitrate, higher frame rates can reduce toward
+30 fps. Sustained healthy active delivery restores quality gradually, with at
+least 45 seconds of healthy evidence per increase. Quiet screens and missing
+feedback do not count as recovered bandwidth. Automatic quality never changes
+screen resolution, Android volume or the chosen H264 decoder.
+
+Choosing a bitrate or frame rate manually turns Automatic quality off. Turning
+its switch off restores the selected upper limits. The mode and limits survive
+restarts. Connection loss or primary-display handoff discards prior measurements.
+The existing encoder must reconnect while a target changes, so brief pauses can
+occur. This is a conservative delivery-feedback pilot, not a guarantee of smooth
+playback on every network or vehicle browser.
+
+The last effective bitrate/frame rate remains in the original encoder settings
+format. Rolling back to RC2 stops automatic adaptation; its older interface can
+retain those last effective manual targets. Select the desired manual values
+before rollback if needed. No media content or network trace is recorded.
 
 ## Status and rollback
 

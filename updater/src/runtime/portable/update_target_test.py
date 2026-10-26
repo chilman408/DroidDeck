@@ -19,7 +19,7 @@ class Target(unittest.TestCase):
         record=Path(__file__).parents[1]/'preview-gateway/release-version.json'
         self.assertTrue(record.is_file(),'Shared gateway/package version record required')
         self.assertEqual(D.VERSION,D.P.document(record.read_bytes())['version'])
-        self.assertEqual(D.VERSION,'0.1.1-rc.11')
+        self.assertEqual(D.VERSION,'0.1.1-rc.12')
         self.assertIn('release-version.json',D.GATEWAY)
 
     def setUp(self):

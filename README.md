@@ -7,7 +7,7 @@ Android streamed to your browser from an Ubuntu virtual machine.
 ## Pilot Release
 
 **Already running 0.1.0-rc.2 or an older signed gateway update?** The signed
-**0.1.1-rc.11 updater** adds **Settings → Updates**. Install the signed updater
+**0.1.1-rc.12 updater** adds **Settings → Updates**. Install the signed updater
 once, then use the browser to check for pilot releases, install updates, follow
 progress and request rollback. Android apps, accounts, settings and HTTPS identity
 are preserved. See [update and rollback instructions](UPDATE.md) and
@@ -18,6 +18,11 @@ Updates use the existing release-signing authority and original recovery engine.
 The update helper runs independently of the stream, so browser disconnects do not
 cancel an accepted operation. Updates require the primary display's permissions.
 This is a gateway update; use the separate RC2 clean installer below for a new VM.
+
+**Optional Automatic quality** in Settings → Display adjusts the shared encoder
+to the primary display’s connection, within your selected bitrate/frame-rate
+limits. It defaults off; manual choices take over immediately. See the
+[quality controls](UPDATE.md#automatic-quality).
 
 Includes the native GPU supervision and Tesla-tested WebCodecs compatibility fixes.
 Settings → Display → Renderer offers H264 (WebCodecs) and H264 (Legacy), with

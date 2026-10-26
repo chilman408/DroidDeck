@@ -1,7 +1,7 @@
 # Known Limitations
 
 - Technical pilot, not a prebuilt VM. RC2 is the clean installer; the signed
-  0.1.1-rc.11 pilot supports cumulative gateway updates on an existing RC2 setup.
+  0.1.1-rc.12 pilot supports cumulative gateway updates on an existing RC2 setup.
   Android images, frontend and native/Java libraries remain unchanged. See
   [the update guide](../UPDATE.md) for the original-RC2 rollback baseline and scope.
 - rc.2 includes the reboot fix. Configured rc.1 VMs should use
@@ -32,3 +32,10 @@
   Android images and libraries remain outside its scope. Rollback returns to RC2,
   whose older interface may not contain the Updates section; later releases must
   be strictly newer than every consumed attempt. See the update guide.
+
+- Automatic quality is opt-in and uses the primary display's acknowledgement
+  timing and queue backlog. It does not adapt resolution or measure decoder CPU.
+  Quality changes restart the existing encoder and may briefly reconnect video.
+  Generated-motion desktop tests cover both H264 decoders at a constrained
+  1 Mbps delivery rate, recovery and manual takeover; real parked vehicle and
+  wider Wi-Fi/cellular validation remain necessary before broader claims.
