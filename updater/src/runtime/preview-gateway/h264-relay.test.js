@@ -211,3 +211,28 @@ test('resizing retains physical credit and sends the new configuration before it
     assert.deepEqual(packets.slice(4).map(p => [p[0], p[16]]), [[0x40, 0x68], [0x20, 0x79]]);
   } finally { client.terminate(); await relay.shutdown(); }
 });
+
+
+test('relay feedback is numeric, session scoped, ignores duplicate receipts and refuses ambiguous reconnects', async () => {
+  let now = 0; const source = new PassThrough(), relay = createVideoRelay({ connect: () => source, clock: () => now });
+  await new Promise(resolve => relay.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${relay.address().port}`, token = 'a'.repeat(64);
+  const client = new WebSocket(base.replace('http:', 'ws:'), 'droiddeck-live-v1', { headers: { 'X-DroidDeck-Display-Session': token } });
+  const ids = []; let duplicate;
+  client.on('message', (bytes, binary) => { if (!binary) { const v = JSON.parse(bytes); if (v.type === 'scrcpy-flow-frame') ids.push(v.id); } });
+  const metrics = async key => (await fetch(base + '/flow-state', { headers: { 'X-DroidDeck-Display-Session': key } })).json();
+  try {
+    await once(client, 'open'); source.write(Buffer.concat([Buffer.from('h264'), header(960, 720), frame(0x40), frame(0x20)]));
+    await new Promise(resolve => setTimeout(resolve, 15)); now = 1200;
+    const v = await metrics(token); assert.equal(v.available, true); assert.equal(v.oldestMs, 1200); assert.equal(v.ackedPackets, 0);
+    assert.equal(JSON.stringify(v).includes(token), false); assert.equal(JSON.stringify(v).includes('packet'), false);
+    assert.deepEqual(await metrics('b'.repeat(64)), { available: false });
+    assert.equal((await fetch(base + '/flow-state')).status, 403);
+    client.send(JSON.stringify({ type: 'scrcpy-flow-ack', id: ids[0] })); await new Promise(r => setTimeout(r, 15));
+    const a = await metrics(token); assert.equal(a.ackedPackets, 1); assert.equal(a.ackDelayMs, 1200); assert.equal(a.acknowledgedBytes, 17);
+    client.send(JSON.stringify({ type: 'scrcpy-flow-ack', id: ids[0] })); await new Promise(r => setTimeout(r, 15));
+    assert.deepEqual(await metrics(token), a);
+    duplicate = new WebSocket(base.replace('http:', 'ws:'), 'droiddeck-live-v1', { headers: { 'X-DroidDeck-Display-Session': token } });
+    await once(duplicate, 'open'); assert.deepEqual(await metrics(token), { available: false });
+  } finally { client.terminate(); duplicate?.terminate(); await relay.shutdown(); }
+});

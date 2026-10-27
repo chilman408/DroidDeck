@@ -162,7 +162,7 @@ test('gateway serves the policy after authentication, without modifying the fron
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.deepEqual(response.body, Buffer.concat([original, Buffer.from('\n;\n'),
       fs.readFileSync(path.join(__dirname, policyFile)), ...(asset.includes('/settings/') ?
-        [Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js'))] : [])]));
+        [Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-audio-policy.js'))] : [])]));
     assert.deepEqual(fs.readFileSync(path.join(root, asset)), original);
   }
 });

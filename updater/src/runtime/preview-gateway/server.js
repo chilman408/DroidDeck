@@ -109,6 +109,30 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
   const audioBySession = new Map();
   const gpsBySession = new Map();
   const touchBySession = new Map();
+  const videoSessions = new Map();
+  const adaptiveVideo = videoSettings?.automaticSnapshot ? require('./adaptive-video').createAdaptiveVideo({ store: videoSettings }) : null;
+  let adaptiveTimer, adaptivePending = false;
+  async function adaptiveTick() {
+    if (!adaptiveVideo || adaptivePending || closing) return;
+    adaptivePending = true;
+    try {
+      if (!videoSettings.automaticSnapshot().enabled) { adaptiveVideo.reset(); return; }
+      const owners = [...videoSessions.keys()].filter(token => {
+        try { const state = displayControl.snapshot(token); return state.canControl && state.transactionStatus === 'idle'; } catch { return false; }
+      });
+      if (owners.length !== 1) { adaptiveVideo.reset(); return; }
+      const token = owners[0], authority = displayControl.snapshot(token).generation;
+      const endpoint = new URL(backends.h264); endpoint.protocol = 'http:'; endpoint.pathname = '/flow-state';
+      const response = await fetch(endpoint, { headers: { 'X-DroidDeck-Display-Session': token }, signal: AbortSignal.timeout(1500), redirect: 'error' });
+      if (!response.ok || Number(response.headers.get('content-length')) > 4096) throw new Error('Video feedback unavailable');
+      const chunks = []; let size = 0;
+      for await (const chunk of response.body) { size += chunk.length; if (size > 4096) throw new Error('Video feedback bound exceeded'); chunks.push(chunk); }
+      const state = displayControl.snapshot(token);
+      if (closing || !videoSessions.has(token) || !state.canControl || state.transactionStatus !== 'idle' || state.generation !== authority) { adaptiveVideo.reset(); return; }
+      adaptiveVideo.observe(JSON.parse(Buffer.concat(chunks).toString()), token + ':' + authority);
+    } catch { adaptiveVideo.reset(); }
+    finally { adaptivePending = false; }
+  }
   const sessionExpired = token => {
     for (const socket of audioBySession.get(token) || []) socket.destroy();
     for (const socket of gpsBySession.get(token) || []) socket.destroy();
@@ -177,6 +201,29 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     const pathname = new URL(req.url, `http://${host}`).pathname;
     let decodedUpdatePath;
     try { decodedUpdatePath = decodeURIComponent(pathname); } catch { res.writeHead(400).end(); return; }
+    if (decodedUpdatePath === '/api/videoAutomatic') {
+      res.setHeader('Content-Type', 'application/json');
+      if (pathname !== decodedUpdatePath || req.url !== pathname) { res.writeHead(400).end(); return; }
+      if (!adaptiveVideo || !displayControl) { res.writeHead(404).end(); return; }
+      try {
+        if (req.headers.origin && req.headers.origin !== originFor(host)) throw Object.assign(new Error('Foreign Origin'), { status: 403 });
+        if (req.method === 'GET') {
+          displayControl.snapshot(req.headers['x-display-session']);
+        } else if (req.method === 'POST') {
+          if (req.headers.origin !== originFor(host)) throw Object.assign(new Error('Origin required'), { status: 403 });
+          if (req.headers['content-type'] !== 'application/json') { res.writeHead(415).end(); return; }
+          const owner = () => displayControl.assertOwner(req.headers['x-display-session'], req.headers['x-display-csrf']);
+          owner(); const chunks = []; let size = 0;
+          for await (const chunk of req) { size += chunk.length; if (size > 256) { res.writeHead(413).end(); return; } chunks.push(chunk); }
+          owner();
+          if (access && generation !== access.snapshot().csrfToken) throw Object.assign(new Error('Access changed'), { status: 403 });
+          let value; try { value = JSON.parse(Buffer.concat(chunks).toString()); } catch { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); }
+          videoSettings.configureAutomatic(value); adaptiveVideo.reset();
+        } else { res.setHeader('Allow', 'GET, POST'); res.writeHead(405).end(); return; }
+        res.end(JSON.stringify({ policy: videoSettings.automaticSnapshot(), profile: videoSettings.snapshot() }));
+      } catch (error) { res.writeHead([400, 403, 409].includes(error.status) ? error.status : 503).end(JSON.stringify({ error: 'Automatic quality unavailable' })); }
+      return;
+    }
     if (decodedUpdatePath === '/api/updates') {
       res.setHeader('Content-Type', 'application/json');
       if (pathname !== '/api/updates' || req.url !== pathname) { res.writeHead(400).end(); return; }
@@ -505,6 +552,17 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     }
     if (pathname === "/") req.url = "/index.html";
     res.setHeader("Cache-Control", "no-store");
+    const audioAssets = {
+      '/js/audio/audioplayback.js': 'browser-audio-playback.js',
+      '/js/audio/audio-ws-worker.js': 'browser-audio-worker.js',
+    };
+    if (backends.audio && Object.hasOwn(audioAssets, decoded) && ['GET', 'HEAD'].includes(req.method)) {
+      const body = fs.readFileSync(path.join(__dirname, audioAssets[decoded]));
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      res.setHeader('Content-Length', body.length);
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
     const browserPolicies = {
       '/js/display/display-renderer-manager.js': 'browser-renderer-policy.js',
       '/js/settings/settings-controller.js': 'browser-settings-policy.js',
@@ -516,7 +574,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       const original = fs.readFileSync(path.join(frontendDir, decoded.slice(1)));
       const policy = fs.readFileSync(path.join(__dirname, browserPolicies[decoded]));
       const updatePolicy = decoded === '/js/settings/settings-controller.js' ?
-        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js'))]) : Buffer.alloc(0);
+        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-audio-policy.js'))]) : Buffer.alloc(0);
       const body = Buffer.concat([original, Buffer.from('\n;\n'), policy, updatePolicy]);
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Content-Length', body.length);
@@ -576,6 +634,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       });
       return;
     }
+    delete req.headers['x-droiddeck-display-session'];
     let target = pathname === "/sockets/display" ? backends.display :
       pathname === "/sockets/touchscreen" ? backends.touchscreen : pathname === "/sockets/audio" ? backends.audio : null;
     if (!target) {
@@ -608,6 +667,11 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
         }
         socket.once("close", () => displayControl.disconnect(token, channel));
       }
+      if (formats.length) {
+        req.headers['x-droiddeck-display-session'] = token;
+        videoSessions.set(token, (videoSessions.get(token) || 0) + 1);
+        socket.once('close', () => { const count = (videoSessions.get(token) || 1) - 1; if (count) videoSessions.set(token, count); else videoSessions.delete(token); });
+      }
       req.url = pathname;
     }
     delete req.headers.authorization;
@@ -639,7 +703,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
   let closePromise;
   server.close = callback => {
     if (!closePromise) {
-      closing = true; closeStreams();
+      closing = true; clearInterval(adaptiveTimer); adaptiveVideo?.reset(); closeStreams();
       const stopped = new Promise((resolve, reject) => nativeClose(error => error ? reject(error) : resolve()));
       closePromise = Promise.all([stopped, gpsControl?.close()]);
     }
@@ -647,6 +711,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     return server;
   };
   server.once("close", () => { audioSettings?.off("change", audioChanged); displayControl?.off("expired", sessionExpired); displayControl?.off("pause", closeStreams); displayControl?.close(); closeStreams(); gpsServer?.close(); });
+  if (adaptiveVideo) server.once('listening', () => { adaptiveTimer = setInterval(() => { void adaptiveTick(); }, 1000); adaptiveTimer.unref(); });
   return server;
 }
 

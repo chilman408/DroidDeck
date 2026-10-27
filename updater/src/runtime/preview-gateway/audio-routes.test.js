@@ -29,6 +29,13 @@ for (const audioPcmGain of [false, true]) test("audio routes preserve configurat
   t.after(async () => { for (const c of clients) c.terminate(); for (const c of backend.clients) c.terminate();
     await new Promise(r => gateway.close(r)); await new Promise(r => backend.close(r)); await new Promise(r => api.close(r));
     fs.rmSync(directory, { recursive: true, force: true }); });
+  for (const [url, file] of [['audioplayback.js', 'browser-audio-playback.js'], ['audio-ws-worker.js', 'browser-audio-worker.js']]) {
+    const response = await fetch(base + '/js/audio/' + url);
+    assert.equal(response.status, 200); assert.equal(await response.text(), fs.readFileSync(path.join(__dirname, file), 'utf8'));
+    const head = await fetch(base + '/js/audio/' + url, { method: 'HEAD' });
+    assert.equal(head.status, 200); assert.equal(await head.text(), '');
+  }
+  assert.equal(fs.existsSync(path.join(directory, 'js/audio/audioplayback.js')), false, 'Gateway does not alter protected frontend assets');
   const config = await (await fetch(base + "/api/configuration")).json();
   assert.equal(config.unchanged, 42); assert.equal(config.browserAudioSupported, 1);
   assert.equal(config.browserAudioGainSupported, audioPcmGain ? 1 : 0);
