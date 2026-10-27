@@ -1,7 +1,7 @@
 # Known Limitations
 
 - Technical pilot, not a prebuilt VM. RC2 is the clean installer; the signed
-  0.1.1-rc.12 pilot supports cumulative gateway updates on an existing RC2 setup.
+  0.1.1-rc.16 pilot supports cumulative gateway updates on an existing RC2 setup.
   Android images, frontend and native/Java libraries remain unchanged. See
   [the update guide](../UPDATE.md) for the original-RC2 rollback baseline and scope.
 - rc.2 includes the reboot fix. Configured rc.1 VMs should use
@@ -39,3 +39,13 @@
   Generated-motion desktop tests cover both H264 decoders at a constrained
   1 Mbps delivery rate, recovery and manual takeover; real parked vehicle and
   wider Wi-Fi/cellular validation remain necessary before broader claims.
+
+- AAC-LC128kbps is the browser audio default; FLAC is a manual browser-local
+  option and fallback. Bounded live queues prevent stale-session replay, but
+  poor links can still cause audible gaps. No universal network guarantee.
+- VirtIO3D remains the supported rendering setup. Hardware video encoding is
+  not enabled, and no GPU passthrough or replacement VM is required.
+- Secure lockscreens required by private apps are supported. None is an initial
+  default, not an update requirement; existing credentials are never cleared.
+- RC16 browser/gateway cleanup was checked without another reboot. Earlier
+  reboot/recovery evidence is retained; this is scoped engineering acceptance.

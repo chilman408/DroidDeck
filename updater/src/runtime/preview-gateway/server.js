@@ -552,6 +552,17 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     }
     if (pathname === "/") req.url = "/index.html";
     res.setHeader("Cache-Control", "no-store");
+    const audioAssets = {
+      '/js/audio/audioplayback.js': 'browser-audio-playback.js',
+      '/js/audio/audio-ws-worker.js': 'browser-audio-worker.js',
+    };
+    if (backends.audio && Object.hasOwn(audioAssets, decoded) && ['GET', 'HEAD'].includes(req.method)) {
+      const body = fs.readFileSync(path.join(__dirname, audioAssets[decoded]));
+      res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+      res.setHeader('Content-Length', body.length);
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
     const browserPolicies = {
       '/js/display/display-renderer-manager.js': 'browser-renderer-policy.js',
       '/js/settings/settings-controller.js': 'browser-settings-policy.js',
@@ -563,7 +574,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       const original = fs.readFileSync(path.join(frontendDir, decoded.slice(1)));
       const policy = fs.readFileSync(path.join(__dirname, browserPolicies[decoded]));
       const updatePolicy = decoded === '/js/settings/settings-controller.js' ?
-        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js'))]) : Buffer.alloc(0);
+        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-audio-policy.js'))]) : Buffer.alloc(0);
       const body = Buffer.concat([original, Buffer.from('\n;\n'), policy, updatePolicy]);
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Content-Length', body.length);
@@ -700,7 +711,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     return server;
   };
   server.once("close", () => { audioSettings?.off("change", audioChanged); displayControl?.off("expired", sessionExpired); displayControl?.off("pause", closeStreams); displayControl?.close(); closeStreams(); gpsServer?.close(); });
-  if (adaptiveVideo) server.once('listening', () => { adaptiveTimer = setInterval(() => { void adaptiveTick(); }, 2000); adaptiveTimer.unref(); });
+  if (adaptiveVideo) server.once('listening', () => { adaptiveTimer = setInterval(() => { void adaptiveTick(); }, 1000); adaptiveTimer.unref(); });
   return server;
 }
 

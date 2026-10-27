@@ -24,7 +24,7 @@ test('manual default never adapts; automatic congestion is sustained and rate li
   assert.equal(f.store.snapshot().bitRate, 4000000); f.enable();
   assert.equal(f.sample(bad), null); assert.equal(f.sample(bad), null);
   assert.equal(f.sample(bad).bitRate, 3000000);
-  for (let n = 0; n < 5; n++) f.sample(bad);
+  for (let n = 0; n < 2; n++) f.sample(bad);
   assert.equal(f.store.snapshot().bitRate, 3000000);
   f.sample(bad); assert.equal(f.store.snapshot().bitRate, 2000000);
   for (let n = 0; n < 20; n++) f.sample(bad);
@@ -66,4 +66,27 @@ test('automatic policy persists separately; disabling restores selected ceilings
   assert.equal(reopened.automaticSnapshot().enabled, false);
   fs.writeFileSync(f.file.replace('.json','-automatic.json'), '{}');
   assert.throws(() => createVideoSettings(f.file), /automatic video policy/);
+});
+
+
+test('severe backlog cuts multiple bitrate steps and frame rate within the next valid poll, with a bounded cooldown', t => {
+  const f = fixture(t, { bitRate: 12000000, maxFps: 60 }); f.enable();
+  f.sample();
+  const down = f.sample({ oldestMs: 2500, ackDelayMs: 2200 });
+  assert.deepEqual([down.bitRate, down.maxFps], [1000000, 30]);
+  assert.equal(f.sample({ oldestMs: 2500 }), null);
+  for (let i = 0; i < 15; i++) f.sample();
+  assert.equal(f.store.snapshot().bitRate, 1000000, 'Recovery remains conservative after a fast cut');
+});
+
+test('stalled ACKs cut a severe link in half without invented throughput or waiting twelve seconds', t => {
+  const f = fixture(t, { bitRate: 8000000, maxFps: 60 }); f.enable();
+  f.sample({ ackedPackets: 0, acknowledgedBytes: 0 });
+  const down = f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2200 });
+  assert.deepEqual([down.bitRate, down.maxFps], [4000000, 30]);
+  assert.equal(f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2500 }), null);
+  f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2500 });
+  assert.equal(f.store.snapshot().bitRate, 2000000, 'Severe congestion can cut again after four seconds');
+  f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2500 });
+  assert.equal(f.store.snapshot().bitRate, 2000000);
 });

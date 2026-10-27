@@ -36,7 +36,7 @@ test('real gateway uses only current-primary relay feedback, strips forged sessi
   assert.equal(response.status,200);await sleep(6500);assert.equal(store.snapshot().bitRate,4000000,'Blocked secondary cannot control shared quality');
   const foreign=await fetch(`http://127.0.0.1:${relay.address().port}/flow-state`,{headers:{'X-DroidDeck-Display-Session':'f'.repeat(64)}});
   assert.deepEqual(await foreign.json(),{available:false},'Gateway strips the forged client-supplied relay identity');
-  acknowledge=false;await sleep(6500);assert.equal(store.snapshot().bitRate,3000000,'Real primary receipt backlog lowers bitrate');
+  acknowledge=false;await sleep(3500);assert.ok(store.snapshot().bitRate <= 2000000,'Severe primary backlog must cut by at least half within 3.5 seconds');
   primary.terminate();await sleep(100);const revision=store.snapshot().revision;
   await sleep(4000);assert.equal(store.snapshot().revision,revision,'No connected primary means no autonomous write');
 });

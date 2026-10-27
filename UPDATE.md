@@ -1,8 +1,11 @@
-# Signed pilot update: 0.1.1-rc.12
+# Signed pilot update: 0.1.1-rc.16
 
 For an existing working RC2 installation or an older signed gateway candidate.
 This update preserves Android apps, accounts, configuration and HTTPS identity.
-It adds Updates in Settings and retains the browser-local Renderer choice and Tesla-tested AUD fix.
+This cumulative update includes Settings → Updates, faster Automatic quality response,
+bounded live audio recovery, AAC-LC audio by default, the Settings control cleanup,
+and DroidDeck Audio metadata/artwork. It retains both browser-local renderer choices
+and the Tesla-tested AUD compatibility fix.
 Automatic still uses legacy. See [browser compatibility](docs/BROWSER-RENDERER.md).
 
 Use Ubuntu 26.04.1 x86_64 with the accepted Unraid KVM/VirGL setup. For a new VM,
@@ -11,7 +14,7 @@ an existing signed-in Android setup. Require `release.json` acceptance before us
 
 ## Download and verify
 
-Download `droiddeck-0.1.1-rc.12-update.pyz` and `SHA256SUMS` from the official
+Download `droiddeck-0.1.1-rc.16-update.pyz` and `SHA256SUMS` from the official
 [DroidDeck pilot release](https://github.com/chilman408/DroidDeck/releases).
 The `.pyz` is the complete updater: it contains the payload, public source archive,
 release statement, detached signature and installer. It needs no separate hotfix.
@@ -20,7 +23,7 @@ Check the downloaded file against the release's published checksum:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
-python3 -I -B ./droiddeck-0.1.1-rc.12-update.pyz verify
+python3 -I -B ./droiddeck-0.1.1-rc.16-update.pyz verify
 ```
 
 Require the updater file to report `OK`, followed by
@@ -51,7 +54,7 @@ or rebuild the baseline to make verification pass.
 Inside Ubuntu, run:
 
 ```sh
-sudo python3 -I -B ./droiddeck-0.1.1-rc.12-update.pyz \
+sudo python3 -I -B ./droiddeck-0.1.1-rc.16-update.pyz \
   install completed "$RC2_PACKAGE" --accept-existing-policy
 ```
 
@@ -105,9 +108,11 @@ In **Settings → Display**, select the desired bitrate and frame rate, then ena
 The shared encoder responds only to the current primary display's delivery
 feedback; a slow secondary viewer cannot lower quality for everyone.
 
-Sustained congestion lowers bitrate one step at a time, no more often than once
-per 12 seconds. At the minimum bitrate, higher frame rates can reduce toward
-30 fps. Sustained healthy active delivery restores quality gradually, with at
+Sustained moderate congestion lowers bitrate at intervals of at least six
+seconds. Severe backlog can cut bitrate more sharply at intervals of at least
+four seconds and cap the target at 30 fps. These are controller intervals, not
+a guarantee that every connection recovers within that time. At the minimum
+bitrate, higher frame rates can reduce toward 30 fps. Sustained healthy active delivery restores quality gradually, with at
 least 45 seconds of healthy evidence per increase. Quiet screens and missing
 feedback do not count as recovered bandwidth. Automatic quality never changes
 screen resolution, Android volume or the chosen H264 decoder.
@@ -169,6 +174,29 @@ records and report the refusal. Do not delete journals, overwrite retained sourc
 rerun the clean installer or replay old GPU activation commands. Keep a private VM
 backup as usual; the updater does not create or upload a backup of Android data.
 
+## Browser audio and Settings
+
+**Settings → Audio → Audio format** offers AAC-LC at a target of128 kbps stereo
+by default, with FLAC(lossless) as a manual browser-local option. AAC reduces
+network usage compared with lossless audio; transport and container overhead are
+additional. The FLAC option adds `?audio=flac`; choosing AAC removes that override.
+An existing FLAC URL remains explicit. Unsupported or unsuccessful AAC startup
+can fall back to FLAC. No Android codec, account or DRM change is required.
+
+Audio keeps bounded live queues and discards stale sessions when a connection
+stalls, so reconnection starts from the current stream rather than minutes of old
+audio. Poor links can still cause audible gaps. This is not a promise of seamless
+playback on every network. The existing volume and A/V sync preferences are kept.
+
+The Automatic quality circular control now sits above Video bitrate. Audio format
+uses the same dropdown style as the other controls and sits below Browser audio.
+The media title is **DroidDeck Audio** and artwork uses the DroidDeck logo. Browser
+or vehicle media-card caches may keep earlier text/artwork until the page reloads.
+
+User-created secure lockscreens and private apps remain supported. Lock-screen
+None is a fresh-install default, not an ongoing requirement; this gateway update
+never clears a PIN or changes an existing Android credential.
+
 ## Pilot scope
 
 - Gateway updates only; Android images, native/Java libraries and frontend are
@@ -180,5 +208,13 @@ backup as usual; the updater does not create or upload a backup of Android data.
 - Up to 32 retained cumulative release attempts per enrolled controller. Nothing
   silently deletes previous attempts or adopts replacement files.
 - Tested Ubuntu/Unraid/VirGL configuration; other platforms need verification.
-- Network-adaptive streaming, additional GPU acceleration and the Settings redesign
-  are separate follow-up work. Edge/Apple TV investigations remain deferred.
+- Automatic quality and the audio/Settings improvements above are included.
+  Additional GPU video encoding and a larger Settings redesign remain future work.
+  VirtIO 3D Android rendering and intentional software codec4/RGBX/AAC Android
+  decoding are retained. No passthrough GPU or replacement VM is required.
+- Legacy previews without original RC2 installation records are not eligible for
+  this updater. Do not fabricate enrollment or run the clean installer over them.
+- The exact signed RC16 update was installed and checked in the supported
+  environment, and the user accepted the Settings/media changes. Earlier releases
+  supplied reboot/recovery coverage; a new RC16 reboot was not performed for this
+  browser/gateway cleanup. Edge/Apple TV investigations remain deferred.

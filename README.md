@@ -7,7 +7,8 @@ Android streamed to your browser from an Ubuntu virtual machine.
 ## Pilot Release
 
 **Already running 0.1.0-rc.2 or an older signed gateway update?** The signed
-**0.1.1-rc.12 updater** adds **Settings → Updates**. Install the signed updater
+**0.1.1-rc.16 updater** includes **Settings → Updates**, faster adaptive quality,
+bounded live audio recovery and AAC-LC audio by default. Install the signed updater
 once, then use the browser to check for pilot releases, install updates, follow
 progress and request rollback. Android apps, accounts, settings and HTTPS identity
 are preserved. See [update and rollback instructions](UPDATE.md) and
@@ -23,6 +24,10 @@ This is a gateway update; use the separate RC2 clean installer below for a new V
 to the primary display’s connection, within your selected bitrate/frame-rate
 limits. It defaults off; manual choices take over immediately. See the
 [quality controls](UPDATE.md#automatic-quality).
+
+Audio format is selectable below Browser audio in Settings. The media title is
+DroidDeck Audio with the DroidDeck icon. Existing private apps and secure
+lockscreens are preserved.
 
 Includes the native GPU supervision and Tesla-tested WebCodecs compatibility fixes.
 Settings → Display → Renderer offers H264 (WebCodecs) and H264 (Legacy), with
