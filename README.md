@@ -4,6 +4,8 @@ Android apps streamed from an Ubuntu VM to your browser, with shared GPU H264 en
 
 RC17 combines adaptive video quality, AAC-LC audio, expanded Display and Audio settings, Tesla WebCodecs compatibility, and the reversible per-VM GPU addon.
 
+See the [qualification record](rc17/QUALIFICATION.json) and [release checksums](rc17/SHA256SUMS).
+
 ## Install or update
 
 Use the RC17 release assets and [installation and Undo guide](rc17/INSTALL.md). The signed `droidmate-rc17.pyz` contains the guest installer and its public source, signatures and component inventory. Android images and third-party apps are fetched directly from their publishers.

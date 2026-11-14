@@ -153,18 +153,18 @@ and generation with your own. Use a new addon directory and profile for each
 installation; keep the returned profile hash with your local recovery notes.
 
 ```sh
-vm_uuid=$(virsh domuuid YOUR_VM_NAME)
+vm_uuid=$(virsh domuuid "YOUR_VM_NAME")
 addon=/etc/libvirt/droidmate-gpu-addon-rc17-YOUR_GENERATION
 profile=/etc/libvirt/droidmate-qemu-launcher-profile-rc17-YOUR_GENERATION
 manifest_sha=d9f2eda96d5477316bbf8425889b4eb9160afd916f5afe1642c75f7185bf7c96
-# Both paths must be unused. Stop here if either check fails.
-test ! -e "$addon"
-test ! -e "$profile"
-mkdir -m 700 "$addon"
-tar -xf droidmate-gpu-host-v1.tar -C "$addon"
-sha256sum "$addon/manifest.json"
-php "$addon/source/tools/qemu-video-addon-prepare.php" "$addon" "$manifest_sha" "$vm_uuid" "$profile" plan
-php "$addon/source/tools/qemu-video-addon-prepare.php" "$addon" "$manifest_sha" "$vm_uuid" "$profile" prepare
+# Every step is conditional: an existing path stops extraction.
+test ! -e "$addon" &&
+  test ! -e "$profile" &&
+  mkdir -m 700 "$addon" &&
+  tar -xf droidmate-gpu-host-v1.tar -C "$addon" &&
+  sha256sum "$addon/manifest.json" &&
+  php "$addon/source/tools/qemu-video-addon-prepare.php" "$addon" "$manifest_sha" "$vm_uuid" "$profile" plan &&
+  php "$addon/source/tools/qemu-video-addon-prepare.php" "$addon" "$manifest_sha" "$vm_uuid" "$profile" prepare
 ```
 
 Compare the manifest hash above and retain the returned profile SHA256. Preparation
