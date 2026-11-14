@@ -8,30 +8,13 @@ See the [qualification record](rc17/QUALIFICATION.json) and [release checksums](
 
 ## Install or update
 
-Use the RC17 release assets and [installation and Undo guide](rc17/INSTALL.md). The signed `droidmate-rc17.pyz` contains the guest installer and its public source, signatures and component inventory. Android images and third-party apps are fetched directly from their publishers.
+**Start here: [Install DroidMate RC17, step by step](rc17/INSTALL.md).** No Linux experience is assumed. The guide explains where to click, where to paste each command, and what a successful result looks like.
 
-- New VM: clean Ubuntu 26.04.1 x86_64, VirtIO 3D, VNC, at least 6 GB RAM and 128 GB disk. Run `install-new` with your Ubuntu user and VM address.
-- Existing supported VM: run `plan`, then `install-existing`. Android apps, accounts, PINs, settings, desktop and TLS identity are preserved. Do not use the clean installer over an existing Android setup.
-- GPU encoding: prepare the qualified private addon for the selected Unraid VM. Retain VirtIO 3D and VNC. No GPU passthrough or replacement of global QEMU, drivers, shared libraries or GPU permissions is required.
-- Undo: restore the guest first, then gracefully shut down the selected VM and undo its exact host profile.
+- **New installation:** follow Steps 1–15, from creating the Ubuntu VM to opening Android in your browser.
+- **Updating an existing supported VM:** begin at Step 4. Keep your existing disk, apps, accounts, PINs and settings.
+- **Already running RC17 successfully:** no reinstall is needed.
 
-```sh
-sha256sum -c SHA256SUMS --ignore-missing
-python3 -I -B droidmate-rc17.pyz verify
-sudo python3 -I -B droidmate-rc17.pyz plan
-```
-
-After checking the plan, choose exactly one installation path:
-
-```sh
-# Existing recognized installation:
-sudo python3 -I -B droidmate-rc17.pyz install-existing
-
-# Clean Ubuntu only; replace both arguments:
-sudo python3 -I -B droidmate-rc17.pyz install-new YOUR_UBUNTU_USER YOUR_VM_IPV4
-```
-
-Keep the exact installer and original journals for recovery. If a check refuses the target, preserve the records; do not delete receipts or rerun a retired transaction.
+The guide includes download checks, the shared GPU addon, a reboot check and Undo instructions. Use files from the [RC17 release](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.1-rc.17). The signed guest installer contains the program and its source; Android images and third-party apps are downloaded from their publishers.
 
 ## Compatibility and defaults
 
@@ -54,4 +37,4 @@ Private development history and operational checkpoints are not published.
 
 DroidDeck source is GPL-3.0-only; see [LICENSE](LICENSE). Upstream components keep
 their own licenses. No third-party endorsement, certification or account/DRM
-compatibility is asserted. This pilot is checksum-verified, not digitally signed.
+compatibility is asserted. RC17's guest installer verifies its embedded release signature; the older RC2 pilot used checksums without a digital signature.
