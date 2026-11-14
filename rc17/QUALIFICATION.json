@@ -1,0 +1,110 @@
+{
+  "aggregateRelease": "RC17",
+  "aggregateSha256": "7c9a48e879a71cd69d03ce587e2feeef32f231a375c3be3deb685c5b963950d1",
+  "cleanUbuntuInstallation": {
+    "auroraInstalled": true,
+    "composition": true,
+    "finalAggregateOnSameCleanFoundation": {
+      "aggregateSha256": "7c9a48e879a71cd69d03ce587e2feeef32f231a375c3be3deb685c5b963950d1",
+      "exit": 0,
+      "seconds": 228.871
+    },
+    "foundationSourcesAndNineAssetsUnchanged": true,
+    "fullInstallRun": {
+      "aggregateSha256": "0d47a604d95593ba32452684bb67cf22d7c7eba3c66d9f9d8af8964ac84d76f7",
+      "exit": 0,
+      "seconds": 1697.916
+    },
+    "newInstallLockscreenDisabled": true,
+    "originalFoundationStepsPassed": 35,
+    "predecessorUndoAfterGpuReboot": {
+      "exit": 0,
+      "seconds": 81.477
+    },
+    "publisherAndroidDownloads": true,
+    "signedCore20Verified": true,
+    "ubuntu": "26.04.1"
+  },
+  "coreRuntimeVersion": "0.1.1-rc.20",
+  "finalPreservingUpdates": [
+    {
+      "exit": 0,
+      "hardwareEncoderNamespaceVerified": true,
+      "layout": "legacy",
+      "seconds": 74.373
+    },
+    {
+      "exit": 0,
+      "layout": "portable",
+      "liveGpuControllerVerified": true,
+      "seconds": 521.763
+    }
+  ],
+  "finalRebootVerification": {
+    "allHaveCurrentInvocationVaapiAndFirstKeyframe": true,
+    "allHaveSevenActiveServices": true,
+    "allHaveTrustedHttpsAndExactFrontend": true,
+    "cleanFoundationWithFinalAggregate": true,
+    "existingLegacy": true,
+    "existingPortable": true,
+    "noCodecFallbackMarkers": true
+  },
+  "focusedNativeTests": {
+    "cases": 133,
+    "failed": 0,
+    "independentReadOnlyReviews": "no concrete blocker",
+    "skipped": 1,
+    "sourceClosureFailed": 0,
+    "sourceClosureTests": 9
+  },
+  "hostContract": {
+    "globalQemuLibrariesDriversOrPermissionsChanged": false,
+    "gpu": "shared AMD 780M through VirtIO 3D",
+    "qemu": "9.2.3",
+    "unraid": "7.1.4",
+    "vncRetained": true
+  },
+  "installerSha256": "af5e342b907cc9e906e6698284b70ae051495b51706ba35803568cc889708d37",
+  "kind": "droidmate-rc17-pilot-qualification",
+  "mediaHealth": {
+    "framesSavedOrUploaded": false,
+    "legacyAndPortableH264DecodedInMemory": true,
+    "nonBlackFrames": true,
+    "touchResizeGpsOrSettingsMutated": false
+  },
+  "preservedOnBothExistingLayouts": [
+    "Android data directory identity",
+    "installed packages",
+    "user lockscreen choice and private-app PIN requirement",
+    "public certificate and TLS identity",
+    "Ubuntu desktop"
+  ],
+  "privacy": {
+    "additionalPublicationMetadataScanned": true,
+    "configuredAndroidImagesAccountDataOrPrivateKeysIncluded": false,
+    "privateDevelopmentGitHistoryIncluded": false,
+    "sensitiveFindings": 0,
+    "sourceAndExecutableAssetMembersScanned": 4704
+  },
+  "publicTreeVerificationBenchmark": {
+    "bytes": 2700665,
+    "files": 243,
+    "newSeconds": 0.103,
+    "oldSeconds": 4.016,
+    "publicFilesChanged": false,
+    "streamCpuSavingPercentageClaimed": false
+  },
+  "qualifiedDate": "2026-11-14",
+  "recovery": {
+    "actualExplicitUndoSeconds": 87.142,
+    "actualOwnedWorkerSigkillAtMappedPhase": true,
+    "automaticRecoveryCandidateSha256": "df9b493967a1722afaaf7002bf216fef0e0bc500f3c4544669be368c2ffea317",
+    "automaticUnassistedRestoreSeconds": 68.778,
+    "explicitUndoCandidateSha256": "9e2aa8ce29b2da5fafa18c806c1c51fc1bc279a871414a916f1290affbdb89a0",
+    "healthyTestingExpiry": false,
+    "legacyStartupRefusalAutomaticallyRestoredOriginalRuntime": true
+  },
+  "schema": 1,
+  "sourceInventorySha256": "92434dcb65df61b1fe392d71a1b32250c948f80b88a24361a49b107ba6871002",
+  "sourceRevision": "027cc8ad23d1d15df16775ab683e4be7cd4f5c07"
+}

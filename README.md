@@ -1,154 +1,49 @@
-# DroidDeck
+# DroidMate RC17
 
-Android streamed to your browser from an Ubuntu virtual machine.
+Android apps streamed from an Ubuntu VM to your browser, with shared GPU H264 encoding and CPU fallback.
 
-![DroidDeck logo](installer/src/runtime/branding/droiddeck-logo.png)
+RC17 combines adaptive video quality, AAC-LC audio, expanded Display and Audio settings, Tesla WebCodecs compatibility, and the reversible per-VM GPU addon.
 
-## Pilot Release
+See the [qualification record](rc17/QUALIFICATION.json) and [release checksums](rc17/SHA256SUMS).
 
-**Already running 0.1.0-rc.2 or an older signed gateway update?** The signed
-**0.1.1-rc.16 updater** includes **Settings → Updates**, faster adaptive quality,
-bounded live audio recovery and AAC-LC audio by default. Install the signed updater
-once, then use the browser to check for pilot releases, install updates, follow
-progress and request rollback. Android apps, accounts, settings and HTTPS identity
-are preserved. See [update and rollback instructions](UPDATE.md) and
-[pilot releases](https://github.com/chilman408/DroidDeck/releases).
-See the [exact pilot acceptance record](updater/ACCEPTANCE.json).
+## Install or update
 
-Updates use the existing release-signing authority and original recovery engine.
-The update helper runs independently of the stream, so browser disconnects do not
-cancel an accepted operation. Updates require the primary display's permissions.
-This is a gateway update; use the separate RC2 clean installer below for a new VM.
+Use the RC17 release assets and [installation and Undo guide](rc17/INSTALL.md). The signed `droidmate-rc17.pyz` contains the guest installer and its public source, signatures and component inventory. Android images and third-party apps are fetched directly from their publishers.
 
-**Optional Automatic quality** in Settings → Display adjusts the shared encoder
-to the primary display’s connection, within your selected bitrate/frame-rate
-limits. It defaults off; manual choices take over immediately. See the
-[quality controls](UPDATE.md#automatic-quality).
-
-Audio format is selectable below Browser audio in Settings. The media title is
-DroidDeck Audio with the DroidDeck icon. Existing private apps and secure
-lockscreens are preserved.
-
-Includes the native GPU supervision and Tesla-tested WebCodecs compatibility fixes.
-Settings → Display → Renderer offers H264 (WebCodecs) and H264 (Legacy), with
-legacy as the Automatic default. See [GPU guard details](docs/GPU-GUARD.md) and
-[browser compatibility](docs/BROWSER-RENDERER.md).
-
-**0.1.0-rc.2 is an early technical pilot with the reboot fix integrated.**
-New installations use one source installer and one installation command. No
-separate hotfix is needed. Use the RC2 clean installer below for a new VM;
-the signed gateway updater above is for an existing RC2 installation.
-
-Already running rc.1? Keep your apps and login data and use
-[its dedicated hotfix](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.1-hotfix.1).
-Do not run the clean installer over an existing Android setup.
-
-## Installation
-
-### 1. Prepare a Clean VM
-
-Use fresh **Ubuntu 26.04.1 x86_64** on Unraid KVM with working **VirGL 3D**,
-128 GiB disk, 6 GiB RAM, Internet access, and a reserved LAN IPv4 address.
-Create the first regular administrative user (tested UID/GID 1000). Run the
-commands inside Ubuntu, not on the Unraid host. The installer refuses populated
-or partially installed targets; it does not upgrade or erase them.
-
-### 2. Download and Verify
-
-Download all five named assets from the
-[rc.2 release](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.0-rc.2)
-into one directory on the VM:
-
-- `droiddeck-0.1.0-rc.2-source.tar`
-- `INSTALL.md`
-- `COPYING`
-- `release.json`
-- `SHA256SUMS`
-
-The TAR is the single installer package; the other files provide instructions,
-licensing, acceptance metadata and checksums. Do not use GitHub's automatic
-**Source code (zip)** or **Source code (tar.gz)** downloads instead.
-
-In the download directory, verify before root extraction:
+- New VM: clean Ubuntu 26.04.1 x86_64, VirtIO 3D, VNC, at least 6 GB RAM and 128 GB disk. Run `install-new` with your Ubuntu user and VM address.
+- Existing supported VM: run `plan`, then `install-existing`. Android apps, accounts, PINs, settings, desktop and TLS identity are preserved. Do not use the clean installer over an existing Android setup.
+- GPU encoding: prepare the qualified private addon for the selected Unraid VM. Retain VirtIO 3D and VNC. No GPU passthrough or replacement of global QEMU, drivers, shared libraries or GPU permissions is required.
+- Undo: restore the guest first, then gracefully shut down the selected VM and undo its exact host profile.
 
 ```sh
-sha256sum -c SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+python3 -I -B droidmate-rc17.pyz verify
+sudo python3 -I -B droidmate-rc17.pyz plan
 ```
 
-Continue only when every file reports `OK`. Obtain the checksums from the trusted
-release channel; a checksum does not authenticate its own download source.
-
-### 3. Install
-
-Extract the verified source into a new root-owned directory:
+After checking the plan, choose exactly one installation path:
 
 ```sh
-sudo mkdir -m755 /usr/local/share/droiddeck-0.1.0-rc.2 &&
-sudo tar --no-same-owner --no-same-permissions \
-  -xf droiddeck-0.1.0-rc.2-source.tar \
-  -C /usr/local/share/droiddeck-0.1.0-rc.2
+# Existing recognized installation:
+sudo python3 -I -B droidmate-rc17.pyz install-existing
+
+# Clean Ubuntu only; replace both arguments:
+sudo python3 -I -B droidmate-rc17.pyz install-new YOUR_UBUNTU_USER YOUR_VM_IPV4
 ```
 
-Replace `YOUR_UBUNTU_USER` with your administrative username and `YOUR_VM_IPV4`
-with the reserved private LAN address. Leave `droiddeck.invalid` unchanged:
+Keep the exact installer and original journals for recovery. If a check refuses the target, preserve the records; do not delete receipts or rerun a retired transaction.
 
-```sh
-sudo python3 -I -B \
-  /usr/local/share/droiddeck-0.1.0-rc.2/droiddeck-source-candidate/droiddeck-install \
-  --install-machine YOUR_UBUNTU_USER YOUR_VM_IPV4 droiddeck.invalid
-```
+## Compatibility and defaults
 
-Keep the terminal or SSH connection open until installation completes. The
-installer acquires publisher-hosted inputs, compares two native/Java/library
-builds, installs the complete services and verifies real Android GPU rendering.
-The reboot fix and bounded startup waits are installed automatically.
+The qualified GPU host contract is Unraid 7.1.4 / QEMU 9.2.3 with the tested shared AMD render device. Other host contracts are refused; CPU fallback remains available. GPU resize is used for beneficial same-aspect downscaling; other preprocessing stays on CPU. No whole-host CPU-saving percentage is claimed.
 
-If installation stops, do not rerun it or delete partial state. Preserve its
-journals and follow the [recovery guidance](docs/INSTALL.md#recovery-and-scope).
+AAC-LC is the default browser audio format, with 64, 128 and 256 kbps choices and optional automatic quality. Display resolutions are 1080p, 900p, 720p, 600p and 480p, defaulting to 720p. Dynamic and manual aspect ratios, 15 fps, 450/720 kbps video and both H264 renderers are included. Automatic video quality preserves the selected ceilings and uses 15 fps at or below 1 Mbps.
 
-### 4. Connect
+Aurora Store is a new-install default. User-created secure lockscreens and private apps are supported. Test vehicle browsers while parked.
 
-Open `https://YOUR_VM_IPV4:8443/` after installation succeeds. As the selected
-Ubuntu user, inspect the public TLS certificate through your authenticated VM
-connection before trusting it on each client:
+The public repository URL and existing internal service identifiers retain DroidDeck for compatibility. The application is DroidMate. Immutable signed core runtime `0.1.1-rc.20` is included under the aggregate RC17 release; it is not downgraded or renamed.
 
-```sh
-openssl x509 -in ~/.config/droiddeck/cert.pem -noout -sha256 -fingerprint
-```
-
-Trust only that public certificate, or use an authenticated trusted reverse
-proxy. Never export `key.pem` or disable TLS verification globally. Optional
-browser login defaults **off**: trusted LAN only, no Internet port forwarding.
-
-Check video, audio after a browser gesture, touch, and reconnect after reboot.
-Android should start before an interactive Ubuntu login. See the
-[full guide](docs/INSTALL.md), [pilot checklist](docs/PILOT.md) and
-[known limitations](docs/KNOWN_LIMITATIONS.md).
-
-## Tested Scope
-
-- Fresh whole-command installation with independently reproducible source TARs
-  and two compared artifact builds.
-- Native VirGL GPU rendering; intentional software codec4/RGBX/AAC media decoding.
-- Normal reboot, reboot interrupted during Android startup, and startup taking
-  longer than the original 60-second limit.
-- Full-display crash recovery, desktop/mobile H264 and AAC, native touch after
-  idle, and two-display handoff with continuing audio.
-
-This is not a guarantee for every app, GPU, browser, vehicle or DRM service.
-Community images, APKs, SDK tools and third-party libraries are fetched from
-their publishers, not bundled or mirrored in the release.
-
-## Defaults and Safety
-
-Aurora Store is installed by default. Initial browser-route media volume is
-100% and the initial Android lockscreen is disabled. Later user choices are
-preserved. Do not replace the image's Google Play Services through Aurora.
-Test vehicle browsers only while parked.
-
-Never upload Android data, VM disks, credentials, account tokens, private keys
-or DRM files. Report selected redacted errors, host/guest/browser versions and
-the failing installation phase. See [SECURITY.md](SECURITY.md) for security reports.
+Never publish Android data, account tokens, passwords, TLS private keys or DRM material. See [security reporting](SECURITY.md). Earlier pilot installation instructions remain in [the RC2 guide](docs/INSTALL.md).
 
 ## Source and License
 
