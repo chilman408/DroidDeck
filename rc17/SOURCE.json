@@ -1,0 +1,7 @@
+{
+  "aggregateRelease": "RC17",
+  "aggregateSha256": "7c9a48e879a71cd69d03ce587e2feeef32f231a375c3be3deb685c5b963950d1",
+  "sourceFiles": 42,
+  "sourceInventorySha256": "92434dcb65df61b1fe392d71a1b32250c948f80b88a24361a49b107ba6871002",
+  "sourceRevision": "027cc8ad23d1d15df16775ab683e4be7cd4f5c07"
+}
