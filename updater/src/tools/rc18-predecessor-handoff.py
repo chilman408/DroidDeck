@@ -142,7 +142,21 @@ class SuccessorHandoff:
             try:os.write(fd,raw);os.fsync(fd)
             finally:os.close(fd)
         os.fsync(parent)
-        with self.b.hold_self():self.b.stage(*(str(self.inputs/n) for n in names),HANDOFF_NEW_CAPTURE)
+        self.stage_controls(names)
+    def stage_controls(self,names):
+        # A previous interrupted handoff may have staged this same signed
+        # capture package. Reuse only the completed authenticated immutable slot;
+        # never overwrite incomplete staging or replay a capture operation.
+        with self.b.hold_self():
+            slot=self.b.ROOT/HANDOFF_NEW_CAPTURE
+            if os.path.lexists(slot):
+                with self.b.hold_controls(HANDOFF_NEW_CAPTURE) as c:
+                    with ExitStack() as stack:
+                        tree=self.b.Tree(stack)
+                        for name,raw in names.items():
+                            if tree.file(slot/name,len(raw),0o600)!=raw:raise ValueError('Exact existing signed capture inputs required')
+                        tree.check();c['check']()
+            else:self.b.stage(*(str(self.inputs/n) for n in names),HANDOFF_NEW_CAPTURE)
         with self.b.hold_controls(HANDOFF_NEW_CAPTURE) as c:c['check']()
     def restore_predecessor(self):
         self.guard_verify();self.old('undo');self.verify_cpu(predecessor=True)

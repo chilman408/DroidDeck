@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Failure seams for the real handoff state machine; no VM/service operations."""
 import importlib.util,unittest,os,sys,tempfile,stat,hashlib
-from contextlib import ExitStack
+from contextlib import ExitStack,contextmanager
 from unittest import mock
 from pathlib import Path,PurePosixPath
 from types import SimpleNamespace
@@ -58,6 +58,26 @@ class Handoff(unittest.TestCase):
       h.prepare_retirement_recovery(old)
       self.assertEqual([x for x in events if isinstance(x,list)],[] if state=='enabled' else [['/usr/bin/systemctl','enable','droiddeck-capture-recover@'+'a'*64+'.service']])
       self.assertEqual(events[-2:],['original-graph','check'])
+ def test_staging_reuses_only_exact_completed_signed_controls_without_forward_replay(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);names={'package.tar':b'package','statement.json':b'statement','signature.bin':b'signature'}
+   for exists,tamper,incomplete in ((False,False,False),(True,False,False),(True,True,False),(True,False,True)):
+    with self.subTest(exists=exists,tamper=tamper,incomplete=incomplete):
+     h=H.SuccessorHandoff.__new__(H.SuccessorHandoff);h.inputs=root/'inputs';calls=[]
+     @contextmanager
+     def hold_self():yield
+     @contextmanager
+     def hold_controls(pin):
+      if incomplete:raise ValueError('Incomplete signed staging preserved')
+      yield {'check':lambda:calls.append('checked')}
+     def read(path,*args):return b'foreign' if tamper and path.name=='signature.bin' else names[path.name]
+     h.b=SimpleNamespace(ROOT=root,hold_self=hold_self,hold_controls=hold_controls,stage=lambda *args:calls.append('stage'),Tree=lambda stack:SimpleNamespace(file=read,check=lambda:True))
+     with mock.patch.object(H,'os',os,create=True),mock.patch.object(H,'ExitStack',ExitStack,create=True),mock.patch.object(os.path,'lexists',return_value=exists):
+      if tamper or incomplete:
+       with self.assertRaises(ValueError):h.stage_controls(names)
+       self.assertNotIn('stage',calls)
+      else:
+       h.stage_controls(names);self.assertEqual(calls.count('stage'),0 if exists else 1);self.assertIn('checked',calls)
  def test_success_commits_every_boundary_and_does_not_replay_accepted(self):
   j=Journal();b=Backend(j);self.assertEqual(H.handoff_transact(j,b,'upgrade-existing')['phase'],'accepted')
   self.assertEqual(j.events,list(H.HANDOFF_PHASES[1:]));self.assertEqual([n for n,_ in b.calls if n!='check'],list(H.HANDOFF_METHODS))
