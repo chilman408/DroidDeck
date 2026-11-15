@@ -29,7 +29,7 @@
     // The choice is browser-local, including on a secondary display.
     for (const input of select.querySelectorAll('button')) input.dataset.localAudioDelay = 'true';
     const row = this._appendTile({ icon: 'graphic_eq', title: 'Audio format', trailing: select }); row.dataset.audioFormat = '1';
-    const status = global.document.createElement('p'); status.className = 'settings-description'; status.setAttribute('role', 'status');
+    const status = global.document.createElement('p'); status.className = 'settings-description dm-audio-status'; status.setAttribute('role', 'status');
     const next = browserTile.nextSibling; this.content.insertBefore(row, next);
     if(typeof audio.setAutomatic==='function'){
       const control=this._createSwitch(initial.automaticQuality===true,enabled=>{
@@ -41,7 +41,7 @@
       const automatic=this._appendTile({icon:'network_check',title:'Automatic quality',trailing:control});automatic.dataset.automaticAudioQuality='1';
       this.content.insertBefore(automatic,row);
     }
-    this.content.insertBefore(status,next);
+    this.content.append(status);
     const refresh = () => {
       if (!row.isConnected || token !== this._renderToken || this.activeSectionId !== 'audio') {
         global.removeEventListener('droiddeck-audio-format', refresh); return;

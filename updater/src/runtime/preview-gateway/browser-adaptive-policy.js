@@ -38,17 +38,16 @@
     if (token !== this._renderToken || this.activeSectionId !== 'display') return;
     const bitrateTile = this.content.querySelector('[data-video-bitrate]')?.closest('.settings-tile');
     if (!bitrateTile) return;
-    const detail = global.document.createElement('p'); detail.className = 'settings-description'; detail.setAttribute('role', 'status');
-    detail.textContent = state.policy.enabled ?
-      'Adjusting up to ' + state.policy.ceilingBitRate / 1000000 + ' Mbps / ' + state.policy.ceilingMaxFps + ' fps. Current: ' + state.profile.bitRate / 1000000 + ' Mbps / ' + state.profile.maxFps + ' fps.' :
-      'Adjusts to the primary display’s connection. Your selected bitrate and frame rate are the upper limits. Selected bitrate and frame rate remain your upper limits while this is on.';
+    const detail = global.document.createElement('p'); detail.className = 'settings-description dm-video-policy-status'; detail.setAttribute('role', 'status');
+    detail.textContent = '';
+
     // Use the same circular on/off control as Browser audio, including keyboard behavior.
     let input;
     const control = this._createSwitch(state.policy.enabled, checked => change(checked), () => allowed(this));
     input = control.querySelector('input'); input.setAttribute('aria-label', 'Automatic quality'); input.disabled = !allowed(this);
     const tile = this._appendTile({ icon: 'network_check', title: 'Automatic quality', trailing: control });
     tile.dataset.automaticQuality = '1';
-    this.content.insertBefore(tile, bitrateTile); this.content.insertBefore(detail, bitrateTile);
+    this.content.insertBefore(tile, bitrateTile); this.content.append(detail);
     const change = async checked => {
 
       if (!allowed(this) || token !== this._renderToken || this.activeSectionId !== 'display') { input.checked = state.policy.enabled; return; }

@@ -28,3 +28,10 @@ selected ceilings are inherited without rewriting the predecessor files, so the
 immutable CPU recovery runtime never sees unsupported 320 kbps or 10 fps values.
 The private successor compiler and control sources are included for review. They
 are development tools, not a released updater or a supported installation command.
+
+Validation follow-up: This Display appears first; video and audio summaries appear
+at the bottom. Connection/device values use consistent typography and wrap long
+addresses. About/donation copy sits beside the illustrations. Corner icon ink is
+slightly more transparent. Closed, non-sensitive encoding telemetry remains
+readable under a restrictive service umask; unfinished writes stay private.
+The new candidate remains unpublished while private rollout is verified.

@@ -22,7 +22,7 @@ test('real Settings overlay keeps player alive and preserves controls, authority
  await page.evaluate(async()=>{
   window.api={displaySession:{token:'generated-session',csrfToken:'generated-csrf'},browserAudioSupported:true,browserGpsManaged:true,browserGpsSupported:true,
    fetchDisplayState:async()=>state,fetchSystemConfiguration:async()=>({'persist.tesla-android.browser_audio.is_enabled':1,'persist.tesla-android.browser_audio.volume':150,'persist.tesla-android.gps.is_active':1}),
-   fetchDeviceInfo:async()=>({deviceInfoVersion:1,networkInfoVersion:1,android_addresses:[]}),fetchBrowserConnection:async()=>({revision:0,hostname:'generated.example',origin:'https://generated.example',defaultOrigin:'https://generated.example'}),fetchBrowserAccess:async()=>({enabled:false,username:'',csrfToken:'generated-csrf'}),postVideoTargets:async payload=>calls.push({video:payload})};
+   fetchDeviceInfo:async()=>({deviceInfoVersion:1,networkInfoVersion:1,android_addresses:[]}),fetchBrowserConnection:async()=>({revision:0,hostname:'generated.example',origin:'https://teslavm1.generated-long-hostname.example',previousOrigin:'https://previous.generated-long-hostname.example',defaultOrigin:'https://generated.example'}),fetchBrowserAccess:async()=>({enabled:false,username:'',csrfToken:'generated-csrf'}),postVideoTargets:async payload=>calls.push({video:payload})};
   window.display={remoteDisplayState:state,controlRequestInFlight:false,setPaused:value=>pauseCalls.push(value)};
   window.settings=new TAHtml.SettingsController({apiClient:api,displayController:display,sidebar:document.querySelector('#settings-sidebar'),content:document.querySelector('#settings-content'),banner:document.querySelector('#settings-banner'),bannerText:document.querySelector('#settings-banner-text'),bannerAction:document.querySelector('#settings-banner-action')});await settings.initialize();
   window.shell=new TAHtml.ShellController({apiClient:api,displayController:display,settingsController:settings,homeShell:document.querySelector('#home-shell'),panelShell:document.querySelector('#panel-shell'),navButtons:[],panelViews:{},appTitle:document.querySelector('#app-title')});shell.setPage('home');pauseCalls=[];shell.setPage('about');
@@ -44,11 +44,20 @@ test('real Settings overlay keeps player alive and preserves controls, authority
     assert.deepEqual(await page.locator('[data-rear-role] label span').allTextContents(),['Master Display','View-Only Display']);
     assert.equal(await page.locator('[data-rear-shared]').count(),0);
     assert.match(await page.locator('.dm-current').textContent(),/GPU/);
+    assert.equal(await page.locator('#settings-content .settings-tile-title').first().textContent(),'This Display');
+    assert.equal(await page.locator('#settings-content').evaluate(e=>e.lastElementChild.matches('.dm-display-status')),true);
+    assert.equal(await page.locator('.dm-current').evaluate(e=>(e.textContent.match(/450 kbps/g)||[]).length),1);
+    assert.match(await page.locator('.dm-current').textContent(),/640 × 480.*450 kbps.*10 fps.*up to 10 Mbps.*60 fps.*GPU/);
+    assert.equal(await page.getByText(/Resolution targets are constrained/).count(),0);
+    assert.equal(await page.locator('.dm-video-policy-status').evaluate(e=>e.closest('.dm-display-status')!==null),true);
    }
    if(id==='audio'){
     assert.equal(await page.locator('[data-audio-format]').count(),1);assert.equal(await page.getByText('Browser Audio',{exact:true}).count(),0);
     assert.equal(await page.locator('.settings-audio-delay-slider').getAttribute('min'),'-750');assert.equal(await page.locator('.settings-audio-delay-slider').getAttribute('max'),'750');
     assert.equal(await page.locator('.settings-volume-value').first().textContent(),'100 %');
+    assert.equal(await page.locator('.dm-audio-status').evaluate(e=>e===e.parentElement.lastElementChild),true);
+    await page.evaluate(()=>{audioState.targetBitRate=64000;dispatchEvent(new Event('droiddeck-audio-format'));});
+    assert.match(await page.locator('.dm-audio-status').textContent(),/64 kbps/);
    }
    if(id==='connectivity'){
     assert.equal(await page.getByRole('checkbox',{name:'Browser Login'}).count(),1);
@@ -56,15 +65,23 @@ test('real Settings overlay keeps player alive and preserves controls, authority
     assert.equal(await page.locator('#connection-hostname').isDisabled(),false);assert.equal(await page.locator('.dm-master-gps').count(),1);
    }
    if(id==='deviceInfo')assert.deepEqual(await page.locator('.dm-settings-group > .dm-group-title').allTextContents(),['Device','Network']);
+   if(id==='connectivity'||id==='deviceInfo'){
+    assert.equal(await page.locator('#settings-content .settings-tile').evaluateAll(rows=>rows.filter(r=>r.querySelector('.settings-trailing-text')).every(r=>getComputedStyle(r.querySelector('.settings-trailing-text')).fontSize===getComputedStyle(r.querySelector('.settings-tile-title')).fontSize)),true,`${id}: value font matches heading`);
+   }
    if(process.env.SETTINGS_SCREENSHOT_DIR&&viewport.width===640&&id==='display')await page.screenshot({path:path.join(process.env.SETTINGS_SCREENSHOT_DIR,'real-settings-640x480.png')});
    if(id==='updates'){
     assert.deepEqual(await page.locator('.dm-settings-group > .dm-group-title').allTextContents(),['Updates','About','Donation','Release Notes']);
     assert.equal(await page.locator('.dm-settings-overlay .donation-qr').count(),1);assert.equal(await page.locator('.dm-older-notes').count(),1);
     assert.match(await page.locator('.dm-settings-group').last().textContent(),/not yet available/);
+    assert.equal(await page.locator('.dm-settings-overlay .about-content,.dm-settings-overlay .donation-content').evaluateAll(rows=>rows.every(row=>{const a=row.firstElementChild.getBoundingClientRect(),b=row.lastElementChild.getBoundingClientRect();return b.left>=a.right&&b.top<a.bottom&&a.top<b.bottom;})),true,'logo/QR beside copy');
    }
   }
  }
- await page.evaluate(async()=>{await settings.setActiveSection('display');await settings._dmChildren[0]._renderActiveSection();});assert.equal(await page.locator('[data-dm-encoding]').count(),1);
+ assert.equal(await page.locator('#home-settings-button').evaluate(e=>getComputedStyle(e).color),'rgba(255, 255, 255, 0.72)');
+ await page.evaluate(async()=>{quality.profile={revision:5,bitRate:720000,maxFps:15};await settings.setActiveSection('display');await settings._dmChildren[0]._renderActiveSection();});
+ assert.match(await page.locator('.dm-current').textContent(),/720 kbps.*15 fps/);
+ await page.evaluate(()=>{quality.profile={revision:6,bitRate:2000000,maxFps:30};});await page.waitForTimeout(2200);
+ assert.match(await page.locator('.dm-current').textContent(),/2 Mbps.*30 fps/);assert.equal(await page.locator('[data-dm-encoding]').count(),1);
  await page.evaluate(async()=>{state.canControl=false;await settings.setActiveSection('connectivity');});
  assert.equal(await page.locator('#connection-hostname').isDisabled(),true);assert.equal(await page.locator('#browser-access-form button[type=submit]').isDisabled(),false);
  await page.evaluate(async()=>{await settings.setActiveSection('display');settings.refreshDisplayControl(state);});assert.equal(await page.locator('[data-dm-encoding] .settings-dropdown-trigger').isDisabled(),true);
