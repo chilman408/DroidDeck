@@ -40,6 +40,24 @@ class Handoff(unittest.TestCase):
    h.b=SimpleNamespace(Tree=lambda stack:SimpleNamespace(file=lambda *args:raw));h.run=lambda args,**kw:calls.append((args,kw))
    with mock.patch.object(H,'Path',lambda raw:root/str(raw).lstrip('/'),create=True),mock.patch.object(H,'os',os,create=True),mock.patch.object(H,'stat',stat,create=True),mock.patch.object(H,'sha',lambda raw:hashlib.sha256(raw).hexdigest(),create=True),mock.patch.object(H,'ExitStack',ExitStack,create=True):h.retire_previous_guard()
    self.assertEqual(calls,[(['/usr/bin/systemctl','stop',unit],{'timeout':200}),(['/usr/bin/systemctl','disable',unit],{})])
+ def test_restored_cpu_retry_reenables_only_exact_quiet_recovery_before_frozen_retirement(self):
+  for state in ('enabled','disabled','masked','foreign'):
+   with self.subTest(state=state):
+    h=H.SuccessorHandoff.__new__(H.SuccessorHandoff);h.old_capture='a'*64;old={};events=[];template=PurePosixPath('/etc/systemd/system/droiddeck-capture-recover@.service');drop=PurePosixPath('/etc/systemd/system/owned.conf')
+    h.program=SimpleNamespace(RECOVERY_TEMPLATE=template,SERVICE=PurePosixPath('/etc/systemd/system/default.service'),handoff_path=lambda pin:drop,recovery_unit=lambda:b'template');h.program_raw=b'program'
+    h.guard_verify=lambda:events.append('guard');h.verify_cpu=lambda **kw:events.append('cpu');h.check=lambda:events.append('check');h.run=lambda args:events.append(args)
+    fields={'LoadState':'loaded','ActiveState':'inactive','Result':'success','FragmentPath':str(template),'DropInPaths':str(drop),'OnSuccess':h.program.SERVICE.name,'OnSuccessJobMode':'fail','UnitFileState':state}
+    if state=='foreign':fields['FragmentPath']='/foreign'
+    h.i=SimpleNamespace(system_fields=lambda *args:fields,quiet=lambda f:events.append('quiet'),payload=lambda *args:{'handoff':b'handoff'},recovery_graph=lambda *args:events.append('original-graph'))
+    h.b=SimpleNamespace(Tree=lambda stack:SimpleNamespace(file=lambda path,*args:b'template' if path==template else b'handoff',check=lambda:True))
+    with mock.patch.object(H,'Path',PurePosixPath,create=True),mock.patch.object(H,'os',os,create=True),mock.patch.object(H,'ExitStack',ExitStack,create=True),mock.patch.object(os.path,'lexists',return_value=False):
+     if state in ('masked','foreign'):
+      with self.assertRaises(ValueError):h.prepare_retirement_recovery(old)
+      self.assertFalse(any(isinstance(x,list) for x in events))
+     else:
+      h.prepare_retirement_recovery(old)
+      self.assertEqual([x for x in events if isinstance(x,list)],[] if state=='enabled' else [['/usr/bin/systemctl','enable','droiddeck-capture-recover@'+'a'*64+'.service']])
+      self.assertEqual(events[-2:],['original-graph','check'])
  def test_success_commits_every_boundary_and_does_not_replay_accepted(self):
   j=Journal();b=Backend(j);self.assertEqual(H.handoff_transact(j,b,'upgrade-existing')['phase'],'accepted')
   self.assertEqual(j.events,list(H.HANDOFF_PHASES[1:]));self.assertEqual([n for n,_ in b.calls if n!='check'],list(H.HANDOFF_METHODS))
@@ -77,7 +95,7 @@ class NativeInterfaces(unittest.TestCase):
  def test_planning_locks_close_before_retirement_and_exited_helper_is_stopped(self):
   import fcntl
   with tempfile.TemporaryDirectory() as tmp:
-   e=H.SuccessorHandoff.__new__(H.SuccessorHandoff);e.guard_verify=lambda:True;e.check=lambda:True
+   e=H.SuccessorHandoff.__new__(H.SuccessorHandoff);e.guard_verify=lambda:True;e.check=lambda:True;e.prepare_retirement_recovery=lambda old:True
    e.j=SimpleNamespace(read=lambda name:{'preference':{'packageSha256':'a'*64}})
    e.program=SimpleNamespace(Native=type('Native',(),{}),SERVICE=Path('/etc/systemd/system/droidmate-gpu-default.service'))
    e.program_raw=b'known program';e.history=Path(tmp)/'history';unit=b'known unit';active=[True];calls=[]
