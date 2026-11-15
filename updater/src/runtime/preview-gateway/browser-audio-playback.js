@@ -3,17 +3,52 @@
 (() => {
   const MIME_TYPES = { flac: 'audio/mp4; codecs="flac"', aac: 'audio/mp4; codecs="mp4a.40.2"' };
   const query = new URLSearchParams(window.location?.search || '');
-  const requestedCodec = query.getAll('audio').length === 1 && query.get('audio') === 'flac' ? 'flac' : 'aac';
-  let codec = requestedCodec, fallbackReason = null, aacFailures = 0, aacProven = false;
+  const QUALITY_KEY = 'DroidDeck_audioQuality_v1';
+  let ceilingBitRate = 128000, automaticQuality = false;
+  try {
+    const saved = JSON.parse(window.localStorage?.getItem(QUALITY_KEY) || 'null');
+    if (saved?.version === 1 && typeof saved.automatic === 'boolean' && [64000,128000,256000].includes(saved.bitRate)) {
+      ceilingBitRate=saved.bitRate;automaticQuality=saved.automatic;
+    }
+  } catch (_) {}
+  const override = query.getAll('audio').length === 1 ? query.get('audio') : null;
+  if (override === 'aac64') ceilingBitRate=64000;
+  else if (override === 'aac256') ceilingBitRate=256000;
+  else if (override === 'aac') ceilingBitRate=128000;
+  const requestedCodec = override === 'flac' ? 'flac' : 'aac';
+  if (requestedCodec === 'flac') automaticQuality=false;
+  let codec = requestedCodec, aacBitRate=automaticQuality ? Math.min(128000,ceilingBitRate) : ceilingBitRate;
+  let requestedFormat=requestedCodec==='flac' ? 'flac' : ceilingBitRate===64000 ? 'aac64' : ceilingBitRate===256000 ? 'aac256' : 'aac';
+  let fallbackReason = null, aacFailures = 0, aacProven = false;
   const announceCodec = () => { try { window.dispatchEvent(new CustomEvent('droiddeck-audio-format')); } catch (_) {} };
+  const saveQuality = () => { try {window.localStorage?.setItem(QUALITY_KEY,JSON.stringify({version:1,automatic:automaticQuality,bitRate:ceilingBitRate}));}catch(_){} };
   window.DroidDeckAudio = Object.freeze({
-    snapshot: () => ({ requested: requestedCodec, effective: codec, targetBitRate: codec === 'aac' ? 128000 : null,
-      fallbackReason, playing: Boolean(audioEl && !audioEl.paused && audioEl.currentTime > 0 && !audioEl.error) }),
+    snapshot: () => ({ requested: requestedFormat, effective: codec, targetBitRate: codec === 'aac' ? aacBitRate : null,
+      ceilingBitRate,automaticQuality,fallbackReason, playing: Boolean(audioEl && !audioEl.paused && audioEl.currentTime > 0 && !audioEl.error) }),
     select(value) {
-      if (!['flac', 'aac'].includes(value)) throw new RangeError('Invalid audio format');
+      if (!['flac','aac','aac64','aac256'].includes(value)) throw new RangeError('Invalid audio format');
       const url = new URL(window.location.href); url.searchParams.delete('audio');
-      if (value === 'flac') url.searchParams.set('audio', 'flac');
+      if (value !== 'aac') url.searchParams.set('audio',value);
+      if(value==='flac')automaticQuality=false;
+      else {
+        ceilingBitRate=value==='aac64'?64000:value==='aac256'?256000:128000;
+        aacBitRate=automaticQuality?Math.min(aacBitRate,ceilingBitRate):ceilingBitRate;
+      }
+      requestedFormat=value;saveQuality();
+      if(value!=='flac' && codec==='aac'){
+        window.history?.replaceState(null,'',url.href);
+        if(started)startWorker(window.audioWebsocketUrl);
+        announceCodec();refreshMediaMetadata();return;
+      }
       if (url.href === window.location.href) window.location.reload(); else window.location.replace(url.href);
+    },
+    setAutomatic(value) {
+      if(typeof value!=='boolean')throw new RangeError('Automatic audio requires boolean');
+      automaticQuality=value;saveQuality();
+      if(codec!=='aac' && value){this.select('aac');return;}
+      if(!value)aacBitRate=ceilingBitRate;
+      if(started && codec==='aac')startWorker(window.audioWebsocketUrl);
+      announceCodec();
     },
   });
   function aacFailure() {
@@ -26,6 +61,7 @@
   const MAX_QUEUE_BYTES     = 512 * 1024;
   const MAX_QUEUE_AGE_MS    = 1500;
   let pendingAck = null;
+  let transportEpoch = null, rebasePending = false, mseCodec = null;
   let userPaused = false;
 
   const TRIM_INTERVAL_MS    = 5000;
@@ -130,6 +166,7 @@
     try {
       userPaused = false; ensureAudioEl();
       resumeAudioContextIfNeeded();
+      refreshMediaMetadata(); refreshMetadataBurst();
       if (delayedStartPending) { delayedStartPaused = false; maybeStartDelayedAudio(); }
       else audioEl.play().catch(()=>{});
     } catch(_) {}
@@ -164,7 +201,13 @@
     audioEl.addEventListener('error', () => {
       recoverPipelineSoon();
     });
-    audioEl.addEventListener('canplay', maybeStartDelayedAudio);
+    audioEl.addEventListener('canplay', () => { maybeStartDelayedAudio(); if (started && isAudioEnabled) { refreshMediaMetadata();refreshMetadataBurst(); } });
+    audioEl.addEventListener('playing', () => {
+      if (started && isAudioEnabled && !userPaused) {
+        refreshMediaMetadata();refreshMetadataBurst();
+        try { navigator.mediaSession.playbackState = 'playing'; } catch (_) {}
+      }
+    });
     audioEl.addEventListener('timeupdate', () => {
       if (codec === 'aac' && !audioEl.paused && audioEl.currentTime > 0 && !audioEl.error) { aacProven = true; announceCodec(); }
     });
@@ -189,6 +232,7 @@
 
   function setupMSE() {
     mediaSource = new MediaSource();
+    mseCodec = codec;
     const activeSource = mediaSource;
     const el = ensureAudioEl();
     mediaUrl = URL.createObjectURL(mediaSource);
@@ -207,7 +251,10 @@
           if (mediaSource !== activeSource || sourceBuffer !== activeBuffer) return;
           appending = false;
           if (pendingAck !== null) {
-            worker?.postMessage({ type: "ack", id: pendingAck }); pendingAck = null;
+            if (pendingAck.owner === worker && pendingAck.epoch === transportEpoch) {
+              worker?.postMessage({ type: 'ack', id: pendingAck.id, epoch: pendingAck.epoch });
+            }
+            pendingAck = null;
           }
           // Seek before appending again: appendBuffer makes updating=true.
           maybeStartDelayedAudio();
@@ -258,6 +305,7 @@
       }
     } catch {}
     mediaSource = null;
+    mseCodec = null;
     if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     mediaUrl = null;
 
@@ -277,46 +325,65 @@
     worker.onmessage = (e) => {
       if (worker !== activeWorker) return;
       const { type } = e.data || {};
-      if (type === 'close' && aacFailure()) { recoverPipelineSoon(); return; }
       if (type === 'open' || type === 'close') {
-        // A new socket has a new init segment and a fresh live timeline.
-        destroyMSE(); queue = []; queueBytes = 0; pendingAck = null; appending = false;
-        if (trimmingTimer) { clearInterval(trimmingTimer); trimmingTimer = null; }
-        clearTimeout(delayedStartTimer); delayedStartTimer = null;
-        delayedStartPending = audioDelayMs > 0; delayedStartPaused = userPaused;
-        if (type === 'open') { audioEl.autoplay = !delayedStartPending && !userPaused; setupMSE(); if (!delayedStartPending && !userPaused) audioEl.play().catch(()=>{}); }
+        if (type === 'close') {
+          if (e.data.epoch !== transportEpoch) return;
+          transportEpoch = null;
+        } else {
+          transportEpoch = e.data.epoch;
+        }
+        // A lost connection is not a user stop. Keep the same element, source
+        // and media session so transient jitter does not release car audio focus.
+        queue = []; queueBytes = 0; rebasePending = true;
+        if (type === 'open') {
+          if (!mediaSource || mseCodec !== codec || audioEl.error || mediaSource.readyState === 'closed') {
+            destroyMSE(); appending = false; pendingAck = null; setupMSE();
+          }
+          refreshMediaMetadata();
+        }
       } else if (type === 'data') {
+        if (e.data.epoch !== transportEpoch) return;
         const ab = e.data.buf;
-        if (ab && ab.byteLength) enqueue(new Uint8Array(ab), e.data.id, e.data.receivedAt);
+        if (ab && ab.byteLength) enqueue(new Uint8Array(ab), e.data.id, e.data.receivedAt, e.data.epoch);
         processQueue();
+      } else if (type === 'quality' && [64000,128000,256000].includes(e.data.bitRate)) {
+        aacBitRate=e.data.bitRate;announceCodec();
       } else if (type === 'error') {
         log('WS worker error:', e.data.message);
       }
     };
-    worker.postMessage({ type: 'start', url, codec });
+    worker.postMessage({ type: 'start', url, codec, bitRate:ceilingBitRate,currentBitRate:aacBitRate,automatic:automaticQuality });
   }
 
   function stopWorker() {
     if (!worker) return;
     try { worker.postMessage({ type: 'stop' }); worker.terminate(); } catch {}
     worker = null;
+    transportEpoch = null;
   }
 
-  function enqueue(u8, id, receivedAt) {
+  function enqueue(u8, id, receivedAt, epoch) {
     const age = Date.now() - receivedAt;
     if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(age) || age < 0 || age > MAX_QUEUE_AGE_MS ||
         queue.length >= 16 || queueBytes + u8.byteLength > MAX_QUEUE_BYTES) {
-      recoverPipelineSoon(); return;
+      recoverPipelineSoon(false); return;
     }
-    queue.push({ u8, id, receivedAt }); queueBytes += u8.byteLength;
+    queue.push({ u8, id, receivedAt, epoch }); queueBytes += u8.byteLength;
   }
 
   function processQueue() {
     if (recovering || !sourceBuffer || sourceBuffer.updating || appending || !queue.length) return;
     const item = queue.shift(); queueBytes -= item.u8.byteLength;
-    if (Date.now() - item.receivedAt > MAX_QUEUE_AGE_MS) { recoverPipelineSoon(); return; }
-    appending = true; pendingAck = item.id;
-    try { sourceBuffer.appendBuffer(item.u8); }
+    if (Date.now() - item.receivedAt > MAX_QUEUE_AGE_MS) { recoverPipelineSoon(false); return; }
+    appending = true; pendingAck = { id: item.id, epoch: item.epoch, owner: worker };
+    try {
+      if (rebasePending) {
+        const b = sourceBuffer.buffered;
+        sourceBuffer.timestampOffset = Math.max(audioEl.currentTime, b.length ? b.end(b.length - 1) : 0);
+        rebasePending = false;
+      }
+      sourceBuffer.appendBuffer(item.u8);
+    }
     catch (_) { pendingAck = null; appending = false; recoverPipelineSoon(); }
     // Keep ownership through updateend, even after updating becomes false.
     // A queued worker message can otherwise overwrite the unacknowledged ID.
@@ -376,17 +443,18 @@
     }, audioDelayMs);
   }
 
-  function recoverPipelineSoon() {
+  function recoverPipelineSoon(rebuild = true) {
     if (recovering || !started || !isAudioEnabled) return;
-    aacFailure(); recovering = true;
-    // Stop stale sound immediately while reconnect backoff is pending.
-    audioEl?.pause(); stopWorker(); queue = []; queueBytes = 0; pendingAck = null;
+    if (rebuild) aacFailure();
+    recovering = true;
+    if (rebuild) audioEl?.pause();
+    stopWorker(); queue = []; queueBytes = 0; rebasePending = true;
     recoveryTimer = setTimeout(() => {
       recoveryTimer = null;
       if (!started || !isAudioEnabled) { recovering = false; return; }
       const preservePause = userPaused;
-      stopAudio();
-      startAudio(preservePause);
+      if (rebuild) { stopAudio(true); startAudio(preservePause); }
+      else startWorker(window.audioWebsocketUrl);
       recovering = false;
     }, 250);
   }
@@ -414,7 +482,7 @@
     return true;
   }
 
-  function stopAudio() {
+  function stopAudio(preserveSession = false) {
     clearTimeout(delayedStartTimer); delayedStartTimer = null; delayedStartPending = false; delayedStartPaused = false;
     if (trimmingTimer) { clearInterval(trimmingTimer); trimmingTimer = null; }
     stopWorker();
@@ -424,21 +492,41 @@
     queueBytes = 0; pendingAck = null;
     appending = false;
 
-    teardownMediaSession();
+    if (!preserveSession) teardownMediaSession();
   }
 
   let mediaRotateTimer = null;
+  let artworkImage = null;
+  let metadataRefreshTimers=[];
+  function refreshMetadataBurst() {
+    for(const timer of metadataRefreshTimers)clearTimeout(timer);
+    metadataRefreshTimers=[250,1000,2500,5000].map(ms=>setTimeout(()=>{if(isAudioEnabled && !userPaused)refreshMediaMetadata();},ms));
+  }
+  function warmArtwork() {
+    if(artworkImage || typeof Image!=='function')return;
+    artworkImage=new Image();
+    artworkImage.onload=()=>{if(started && isAudioEnabled){refreshMediaMetadata();refreshMetadataBurst();}};
+    artworkImage.onerror=()=>{artworkImage=null;};
+    artworkImage.src=new URL('./assets/droiddeck-logo.png?v=20261027-grey',window.location.href).href;
+  }
+  function refreshMediaMetadata() {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      const artwork = new URL('./assets/droiddeck-logo.png?v=20261027-grey', window.location.href).href;
+      navigator.mediaSession.metadata = new MediaMetadata({ title: 'DroidMate Audio', artist: 'Live', album: 'DroidMate',
+        artwork: [{ src: artwork, sizes: '1254x1254', type: 'image/png' }] });
+      // Warm the same-origin image and reapply once decoded. Some car shells
+      // ask for metadata before their artwork loader has finished its first fetch.
+      warmArtwork();
+    } catch (_) {}
+  }
   function setupMediaSession() {
     if (!('mediaSession' in navigator)) return;
     try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: 'DroidDeck Audio',
-        artist: 'Live',
-        album: 'DroidDeck',
-        artwork: [{ src: new URL('./assets/droiddeck-logo.png', window.location.href).href, sizes: '1254x1254', type: 'image/png' }]
-      });
+      refreshMediaMetadata();
       navigator.mediaSession.setActionHandler('play', () => {
         userPaused = false;
+        refreshMediaMetadata();
         if (delayedStartPending) { delayedStartPaused = false; maybeStartDelayedAudio(); return; }
         audioEl?.play(); navigator.mediaSession.playbackState = 'playing';
       });
@@ -452,22 +540,17 @@
       navigator.mediaSession.playbackState = delayedStartPaused ? 'paused' : 'playing';
 
       if (mediaRotateTimer) clearInterval(mediaRotateTimer);
-      mediaRotateTimer = setInterval(() => {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: 'DroidDeck Audio',
-          artist: 'Live',
-          album: 'DroidDeck',
-        artwork: [{ src: new URL('./assets/droiddeck-logo.png', window.location.href).href, sizes: '1254x1254', type: 'image/png' }]
-        });
-      }, 60000);
+      mediaRotateTimer = setInterval(refreshMediaMetadata, 60000);
     } catch(_) {}
   }
 
   function teardownMediaSession() {
     if (!('mediaSession' in navigator)) return;
     try {
+      for(const timer of metadataRefreshTimers)clearTimeout(timer);metadataRefreshTimers=[];
       navigator.mediaSession.playbackState = 'none';
       if (mediaRotateTimer) { clearInterval(mediaRotateTimer); mediaRotateTimer = null; }
     } catch(_) {}
   }
+  warmArtwork();
 })();

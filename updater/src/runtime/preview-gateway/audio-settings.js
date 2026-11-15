@@ -3,7 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { EventEmitter } = require("node:events");
-function createAudioSettings(filename) {
+function createAudioSettings(filename, { alwaysEnabled = false } = {}) {
+  if (typeof alwaysEnabled !== "boolean") throw Error("Invalid audio availability policy");
   const parent = fs.lstatSync(path.dirname(filename));
   if (!parent.isDirectory() || (process.platform !== "win32" && (parent.mode & 0o022))) throw new Error("Invalid audio settings directory");
   const valid = s => s && s.version === 1 && typeof s.enabled === "boolean" && Number.isInteger(s.volume) && s.volume >= 0 && s.volume <= 150 &&
@@ -15,12 +16,13 @@ function createAudioSettings(filename) {
     state = JSON.parse(fs.readFileSync(filename, "utf8")); if (!valid(state)) throw new Error("Invalid saved audio state");
   }
   const events = new EventEmitter();
-  return Object.assign(events, {
-    snapshot: () => ({ enabled: state.enabled, volume: state.volume }),
+  const settings = Object.assign(events, {
+    snapshot: () => ({ enabled: alwaysEnabled || state.enabled, volume: state.volume }),
     update(key, value) {
       if (!Number.isInteger(value) || (key === "enabled" ? ![0, 1].includes(value) : key !== "volume" || value < 0 || value > 150)) {
         throw Object.assign(new Error("Invalid audio preference"), { status: 400 });
       }
+      if (alwaysEnabled && key === "enabled" && value === 0) throw Object.assign(Error("Use browser mute to stop playback"), {status:400});
       const next = { ...state, [key]: key === "enabled" ? value === 1 : value };
       const temporary = filename + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
       try {
@@ -30,5 +32,9 @@ function createAudioSettings(filename) {
       events.emit("change", this.snapshot()); return this.snapshot();
     },
   });
+  // The existing PCM producer reads this file too. Migrate a retired shared off
+  // flag once; browser-local mute/pause and the saved gain remain untouched.
+  if (alwaysEnabled && !state.enabled) settings.update("enabled", 1);
+  return settings;
 }
 module.exports = { createAudioSettings };

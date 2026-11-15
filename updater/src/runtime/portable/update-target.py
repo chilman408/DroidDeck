@@ -34,10 +34,10 @@ SOURCE_PREFIXES = ('runtime/', 'tools/', 'config/', 'tests/')
 SOURCE_SUFFIXES = {'.js', '.json', '.py', '.ps1', '.patch', '.sh', '.service', '.conf', '.md', '.txt',
                    '.java', '.c', '.cpp', '.h', '.bp', '.xml', '.axml', '.pam', '.example', '.svg', '.png', '.pl', '.swap'}
 GATEWAY = tuple(sorted((name + '.js' for name in (
-    'adaptive-video browser-adaptive-policy browser-audio-playback browser-audio-worker browser-audio-policy audio-gain audio-launcher audio-relay audio-settings audio-stream browser-access capture-layout capture-lease '
-    'browser-renderer-policy browser-settings-policy browser-update-policy update-client webcodecs-worker-policy compositor-video-launcher device-info display-control display-helper-client gps-control gps-helper-client '
+    'adaptive-video browser-adaptive-policy browser-display-sizing browser-media-artwork browser-audio-playback browser-audio-worker browser-audio-policy audio-gain audio-launcher audio-relay audio-settings audio-stream browser-access capture-layout capture-lease '
+    'browser-renderer-policy browser-settings-policy browser-settings-overlay browser-update-policy update-client webcodecs-worker-policy compositor-video-launcher device-info display-control display-helper-client gps-control gps-helper-client '
     'gps-location h264-relay rear-display-settings runtime-probe scrcpy-stream server video-capture-controller '
-    'video-launcher video-settings').split()))) + ('compositor-h264.py', 'package.json', 'package-lock.json')
+    'video-launcher video-settings video-encoding').split()))) + ('compositor-h264.py', 'package.json', 'package-lock.json')
 GATEWAY = tuple(sorted((*GATEWAY, 'release-version.json')))
 
 
@@ -160,6 +160,30 @@ def dependency_files(directory):
     return files
 
 
+def owned_artwork(files):
+    # Fixed source/destination mapping: never select an asset from a receipt path
+    # or from the installed frontend. Only committed branding bytes are inputs.
+    receipt_raw = files.get('runtime/branding/logo-receipt.json', b'')
+    data = files.get('runtime/branding/droiddeck-logo.png', b'')
+    if not 0 < len(receipt_raw) <= 4096:
+        raise ValueError('Bounded approved artwork receipt required')
+    receipt = json.loads(receipt_raw, object_pairs_hook=P.unique)
+    expected = {'version': 1, 'product': 'DroidDeck', 'kind': 'browser-cast-logo',
+                'file': 'droiddeck-logo.png',
+                'sha256': 'd50a79c92129aa9e6462eedb0294ce0b5c09da1b91433672225f31c5f938e475',
+                'width': 1254, 'height': 1254, 'transparent': True}
+    if (type(receipt) is not dict or set(receipt) != set(expected)
+            or any(type(receipt[key]) is not type(value) or receipt[key] != value
+                   for key, value in expected.items())):
+        raise ValueError('Closed pinned approved artwork receipt required')
+    if (len(data) != 664836 or data[:8] != b'\x89PNG\r\n\x1a\n'
+            or int.from_bytes(data[8:12], 'big') != 13 or data[12:16] != b'IHDR'
+            or int.from_bytes(data[16:20], 'big') != 1254 or int.from_bytes(data[20:24], 'big') != 1254
+            or data[24:29] != b'\x08\x06\x00\x00\x00' or P.sha(data) != expected['sha256']):
+        raise ValueError('Pinned approved transparent RGBA artwork bytes required')
+    return data
+
+
 def build(source, inventory, dependencies):
     source_manifest, source_files = sources(source)
     value = P.document(inventory)
@@ -174,7 +198,9 @@ def build(source, inventory, dependencies):
         P.inventory(row['files'], component=row['name'])
     before = next(row['files'] for row in value['components'] if row['name'] == 'gateway')
     payloads = {name: source_files['runtime/preview-gateway/' + name] for name in GATEWAY}
-    payloads.update(dependency_files(dependencies))
+    payloads['droiddeck-logo.png'] = owned_artwork(source_files)
+    dependency_payloads = dependency_files(dependencies)
+    payloads.update(dependency_payloads)
     after = [{'path': name, 'size': len(data), 'sha256': P.sha(data), 'mode': 0o644}
              for name, data in sorted(payloads.items())]
     manifest = {'schema': 1, 'kind': 'droiddeck-runtime-update', 'base': P.BASE,
@@ -184,7 +210,7 @@ def build(source, inventory, dependencies):
     archive = P.canonical_archive({P.MANIFEST: (P.encode(manifest), 0o644),
         **{P.PREFIX + 'payload/gateway/' + name: (content, 0o644) for name, content in payloads.items()}})
     review = P.review(archive, P.sha(archive))
-    return archive, {**review, 'sourceArchiveSha256': P.sha(source), 'publisherDependencyFiles': len(payloads) - len(GATEWAY),
+    return archive, {**review, 'sourceArchiveSha256': P.sha(source), 'publisherDependencyFiles': len(dependency_payloads),
                      'payloadExecuted': False, 'nativeArtifactsChanged': False, 'signed': False, 'readyForApply': False}
 
 

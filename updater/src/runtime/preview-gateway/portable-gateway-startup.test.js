@@ -15,6 +15,7 @@ function harness({ rejectAccount = false, environment = {} } = {}) {
         return { isSocket: () => true, uid: 0, gid: 1201, mode: 0o140660 }; } },
     './rear-display-settings': { createRearDisplaySettings: file => { stores.push(file); return {}; } },
     './audio-settings': { createAudioSettings: file => { stores.push(file); return {}; } },
+    './video-encoding': { createEncodingControl: file => { stores.push(file); return {}; } },
     './video-settings': { ...localRequire('./video-settings'), createVideoSettings: file => { stores.push(file); return {}; } },
     './display-helper-client': { ...localRequire('./display-helper-client'), createHelperClient: file => { stores.push(file); return { retireTouch() {} }; } },
     './display-control': { createDisplayControl: () => control },
@@ -39,7 +40,7 @@ test('configured gateway validates identity before TLS reads and shares private 
   assert.equal(fixture.calls[0][0], 'account'); assert.equal(Object.isFrozen(fixture.calls[0][1]), true);
   assert.ok(fixture.reads.includes('/home/display/.config/droiddeck/key.pem'));
   assert.ok(fixture.reads.includes('/home/display/.config/droiddeck/cert.pem'));
-  for (const file of ['rear-display.json', 'browser-audio.json', 'browser-video.json']) assert.ok(fixture.stores.includes('/home/display/.config/droiddeck/' + file));
+  for (const file of ['rear-display.json', 'browser-audio.json', 'browser-video.json', 'browser-encoding.json']) assert.ok(fixture.stores.includes('/home/display/.config/droiddeck/' + file));
   for (const file of ['display.sock', 'gps.sock', 'connection.sock']) assert.ok(fixture.stores.includes('/run/droiddeck/' + file));
   assert.ok(fixture.reads.includes('/etc/droiddeck/proxy-origin'));
   const gateway = fixture.calls.find(row => row[0] === 'gateway')[1];
