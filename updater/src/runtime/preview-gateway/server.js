@@ -9,6 +9,8 @@ const path = require("node:path");
 const proxy = require("http-proxy");
 const serve = require("serve-handler");
 const { createBrowserAccess } = require("./browser-access");
+const { readMediaArtwork } = require("./browser-media-artwork");
+const { displaySizingSource } = require("./browser-display-sizing");
 const { validateState } = require("./display-helper-client");
 const { loadWorkerConfiguration } = require('../portable/worker-config');
 const { deriveRuntimeLayout } = require('../portable/runtime-config');
@@ -60,7 +62,7 @@ function readProxyOrigin(filename) {
   return validateProxyOrigin(fs.readFileSync(filename, "utf8").trim());
 }
 
-function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, proxyOrigin, auth, tls, accessFile, displayControl, audioSettings, gpsControl, videoSettings, connectionControl, updateControl, audioPcmGain = false, deviceInfoProvider, retireTouch } = {}) {
+function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, proxyOrigin, auth, tls, accessFile, displayControl, audioSettings, gpsControl, videoSettings, videoEncodingControl, connectionControl, updateControl, audioPcmGain = false, deviceInfoProvider, retireTouch } = {}) {
   proxyOrigin = validateProxyOrigin(proxyOrigin);
   if (proxyOrigin && !publicOrigin) throw new Error("Proxy origin requires a primary HTTPS gateway");
   if (!frontendDir || !fs.statSync(path.join(frontendDir, "index.html"), { throwIfNoEntry: true }).isFile()) {
@@ -78,6 +80,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
   if (deviceInfoProvider !== undefined && typeof deviceInfoProvider !== "function") throw new Error("Invalid device information provider");
   if (backends.h264 && !displayControl) throw new Error("H264 requires display session authority");
   if (gpsControl && !displayControl) throw new Error("GPS requires display session authority");
+  if (videoEncodingControl && (!displayControl || typeof videoEncodingControl.snapshot !== 'function' || typeof videoEncodingControl.update !== 'function')) throw Error('Encoding controls require display authority');
   if (videoSettings && (!displayControl || !backends.h264)) throw new Error("Video settings require supervised H264 session authority");
   if (retireTouch !== undefined && (typeof retireTouch !== "function" || !displayControl)) throw new Error("Rear display requires native touch retirement");
   if (connectionControl && !displayControl) throw new Error('Browser connection requires session authority');
@@ -336,7 +339,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     if (displayControl && pathname.startsWith("/api/")) {
       let decoded;
       try { decoded = decodeURIComponent(pathname); } catch { res.writeHead(400).end(); return; }
-      const protectedPaths = ["/api/displaySession", "/api/displayState", "/api/videoState", "/api/browserConnection", "/api/rearDisplayState", "/api/displayRole",
+      const protectedPaths = ["/api/displaySession", "/api/displayState", "/api/videoState", "/api/videoEncoding", "/api/browserConnection", "/api/rearDisplayState", "/api/displayRole",
         ...(gpsControl ? ["/api/configuration", "/api/gpsState"] : []),
         ...(backends.audio ? ["/api/configuration", "/api/browserAudioState", "/api/browserAudioVolume"] : [])];
       if (protectedPaths.includes(decoded) && decoded !== pathname) {
@@ -408,6 +411,28 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
         res.writeHead([400, 403, 409].includes(error.status) ? error.status : 503)
           .end(JSON.stringify({ error: error.status ? error.message : 'Browser connection unavailable' }));
       }
+      return;
+    }
+    if (pathname === '/api/videoEncoding') {
+      if (!videoEncodingControl) { res.writeHead(404).end(); return; }
+      if (new URL(req.url, `http://${host}`).search) { res.writeHead(400).end(); return; }
+      res.setHeader('Content-Type', 'application/json');
+      const owner = () => { displayControl.assertOwner(req.headers['x-display-session'], req.headers['x-display-csrf']); if(displayControl.snapshot(req.headers['x-display-session']).transactionStatus !== 'idle') throw Object.assign(Error(),{status:409}); };
+      try {
+        if (req.headers.origin && req.headers.origin !== originFor(host)) throw Object.assign(Error(), {status:403});
+        if (req.method === 'GET') {
+          displayControl.snapshot(req.headers['x-display-session']);
+          res.end(JSON.stringify(videoEncodingControl.snapshot())); return;
+        }
+        if (req.method !== 'POST') { res.setHeader('Allow','GET, POST'); res.writeHead(405).end(); return; }
+        if (req.headers.origin !== originFor(host)) throw Object.assign(Error(), {status:403});
+        if (req.headers['content-type'] !== 'application/json') { res.writeHead(415).end(); return; }
+        owner(); const chunks=[]; let size=0;
+        for await (const chunk of req) {size+=chunk.length;if(size>256){res.writeHead(413).end();return;}chunks.push(chunk);}
+        owner(); if(access && generation !== access.snapshot().csrfToken) throw Object.assign(Error(), {status:403});
+        let payload; try{payload=JSON.parse(Buffer.concat(chunks));}catch{throw Object.assign(Error(),{status:400});}
+        res.end(JSON.stringify(videoEncodingControl.update(payload)));
+      } catch(error) {res.writeHead([400,403,409].includes(error.status)?error.status:503).end(JSON.stringify({error:'Encoding settings unavailable'}));}
       return;
     }
     if (pathname === "/api/videoState") {
@@ -552,6 +577,16 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
     }
     if (pathname === "/") req.url = "/index.html";
     res.setHeader("Cache-Control", "no-store");
+    if (decoded === '/assets/droiddeck-logo.png') {
+      if (!['GET', 'HEAD'].includes(req.method)) {
+        res.setHeader('Allow', 'GET, HEAD'); res.writeHead(405).end(); return;
+      }
+      const body = readMediaArtwork(path.resolve(frontendDir));
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Content-Length', body.length);
+      res.end(req.method === 'HEAD' ? undefined : body);
+      return;
+    }
     const audioAssets = {
       '/js/audio/audioplayback.js': 'browser-audio-playback.js',
       '/js/audio/audio-ws-worker.js': 'browser-audio-worker.js',
@@ -562,6 +597,11 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       res.setHeader('Content-Length', body.length);
       res.end(req.method === 'HEAD' ? undefined : body);
       return;
+    }
+    if (decoded === '/js/display/display-controller.js' && ['GET','HEAD'].includes(req.method)) {
+      const body=Buffer.from(displaySizingSource(fs.readFileSync(path.join(frontendDir,decoded.slice(1)),'utf8')));
+      res.setHeader('Content-Type','text/javascript; charset=utf-8');res.setHeader('Content-Length',body.length);
+      res.end(req.method==='HEAD'?undefined:body);return;
     }
     const browserPolicies = {
       '/js/display/display-renderer-manager.js': 'browser-renderer-policy.js',
@@ -574,7 +614,7 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       const original = fs.readFileSync(path.join(frontendDir, decoded.slice(1)));
       const policy = fs.readFileSync(path.join(__dirname, browserPolicies[decoded]));
       const updatePolicy = decoded === '/js/settings/settings-controller.js' ?
-        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-audio-policy.js'))]) : Buffer.alloc(0);
+        Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-audio-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-settings-overlay.js'))]) : Buffer.alloc(0);
       const body = Buffer.concat([original, Buffer.from('\n;\n'), policy, updatePolicy]);
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Content-Length', body.length);
@@ -760,20 +800,20 @@ async function main({ configuration, create = createGateway, args = process.argv
   async function start() {
     if (process.env.GATEWAY_REAR_DISPLAY !== undefined && process.env.GATEWAY_REAR_DISPLAY !== "1") throw new Error("Invalid rear display flag");
     const rearSettings = process.env.GATEWAY_REAR_DISPLAY === "1" ? require("./rear-display-settings").createRearDisplaySettings(
-      preferenceFile("rear-display.json")) : undefined;
+      preferenceFile("rear-display.json"), {alwaysAvailable:true}) : undefined;
     let displayControl, helper, retireAuthority;
     const displaySocket = configuration ? sockets + '/display.sock' : process.env.GATEWAY_DISPLAY_SOCKET;
     if (displaySocket) {
       if (displaySocket !== sockets + '/display.sock') throw new Error("Unsupported display helper socket");
       const { createHelperClient } = require("./display-helper-client");
       helper = createHelperClient(displaySocket);
-      displayControl = require("./display-control").createDisplayControl({ helper, rearSettings,
+      displayControl = require("./display-control").createDisplayControl({ helper, rearSettings, masterViewOnly:Boolean(rearSettings),
         ...(rearSettings ? { retireTimeoutMs: 30000, retireAuthority: (...args) => retireAuthority(...args) } : {}) });
       await displayControl.initialize();
     }
     if (rearSettings && !displayControl) throw new Error("Rear display requires display session authority");
     const audioSettings = targets.audio ? require("./audio-settings").createAudioSettings(
-      preferenceFile("browser-audio.json")) : undefined;
+      preferenceFile("browser-audio.json"), {alwaysEnabled:true}) : undefined;
     if (process.env.GATEWAY_AUDIO_PCM_GAIN !== undefined && process.env.GATEWAY_AUDIO_PCM_GAIN !== "1") throw new Error("Invalid audio PCM gain flag");
     const audioPcmGain = process.env.GATEWAY_AUDIO_PCM_GAIN === "1";
     if (process.env.GATEWAY_DEVICE_INFO !== undefined && process.env.GATEWAY_DEVICE_INFO !== "1") throw new Error("Invalid device information flag");
@@ -799,8 +839,10 @@ async function main({ configuration, create = createGateway, args = process.argv
       connectionControl = require('../browser-connection/helper').createConnectionClient(connectionSocket);
       await connectionControl.initialize();
     }
+    const videoEncodingControl = videoSettings ? require('./video-encoding').createEncodingControl(
+      preferenceFile('browser-encoding.json')) : undefined;
     const updateControl = configuration ? require('./update-client').createUpdateClient() : undefined;
-    const server = create({ frontendDir, publicOrigin, proxyOrigin, accessFile, tls, targets, displayControl, audioSettings, gpsControl, videoSettings, connectionControl, updateControl, audioPcmGain, deviceInfoProvider,
+    const server = create({ frontendDir, publicOrigin, proxyOrigin, accessFile, tls, targets, displayControl, audioSettings, gpsControl, videoSettings, videoEncodingControl, connectionControl, updateControl, audioPcmGain, deviceInfoProvider,
       ...(rearSettings ? { retireTouch: options => helper.retireTouch(options) } : {}) });
     retireAuthority = server.retireDisplayAuthority;
     server.listen(port, bindAddress, () => console.log(`TeslaAndroid x86 preview at ${publicOrigin || `http://127.0.0.1:${port}`}/`));

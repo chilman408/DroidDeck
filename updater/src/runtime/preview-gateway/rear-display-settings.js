@@ -35,8 +35,9 @@ function readRearDisplaySettings(filename, { uid = process.getuid?.() } = {}) {
     return validateProfile(JSON.parse(buffer.subarray(0, size).toString('utf8')));
   } finally { fs.closeSync(fd); }
 }
-function createRearDisplaySettings(filename) {
-  const snapshot = () => readRearDisplaySettings(filename);
+function createRearDisplaySettings(filename, { alwaysAvailable = false } = {}) {
+  if (typeof alwaysAvailable !== 'boolean') throw Error('Invalid display availability policy');
+  const snapshot = () => { const saved=readRearDisplaySettings(filename); return alwaysAvailable ? {...saved,enabled:true,prioritised:false} : saved; };
   snapshot();
   return {
     snapshot,
@@ -44,6 +45,7 @@ function createRearDisplaySettings(filename) {
       if (!validPreference(payload) || Object.keys(payload).length !== 3) {
         throw failure('Invalid rear display preferences', 400);
       }
+      if (alwaysAvailable && (!payload.enabled || payload.prioritised)) throw failure('Master and view-only displays are always available', 400);
       const current = snapshot();
       if (payload.revision !== current.revision) throw failure('Rear display preferences changed; reload settings', 409);
       if (payload.enabled === current.enabled && payload.prioritised === current.prioritised) return current;

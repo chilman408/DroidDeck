@@ -26,7 +26,7 @@ test('video targets default to current encoder values, persist atomically and re
 test('only bounded integer encoder targets are allowed; corrupt files never fall back silently', t => {
   const filename = fixture(t), { createVideoSettings } = profile(), store = createVideoSettings(filename);
   for (const change of [{ bitRate: 0 }, { maxFps: 120 }, { bitRate: '4000000' }, { maxFps: 30.1 },
-    { command: 'sh' }, { revision: -1 }, { revision: Number.MAX_SAFE_INTEGER }, { bitRate: 6000000 }]) {
+    { command: 'sh' }, { revision: -1 }, { revision: Number.MAX_SAFE_INTEGER }, { bitRate: 5000000 }]) {
     assert.throws(() => store.update({ revision: 0, bitRate: 4000000, maxFps: 30, ...change }));
   }
   assert.equal(fs.existsSync(filename), false);
@@ -36,7 +36,7 @@ test('only bounded integer encoder targets are allowed; corrupt files never fall
 
 test('3 Mbps persists across store recreation without changing defaults or frame rate', t => {
   const filename = fixture(t), { createVideoSettings, readVideoSettings, BIT_RATES } = profile();
-  assert.deepEqual(BIT_RATES, [1000000, 2000000, 3000000, 4000000, 8000000, 12000000]);
+  assert.deepEqual(BIT_RATES, [320000,450000,720000,1000000,2000000,3000000,4000000,6000000,8000000,10000000,12000000]);
   const store = createVideoSettings(filename);
   assert.equal(store.snapshot().bitRate, 4000000);
   const next = store.update({ revision: 0, bitRate: 3000000, maxFps: 30 });
@@ -54,4 +54,27 @@ test('profile reader rejects links and insecure permissions at the privilege bou
   fs.renameSync(other, filename); fs.chmodSync(filename, 0o644); assert.throws(() => readVideoSettings(filename));
   fs.chmodSync(filename, 0o600); fs.chmodSync(path.dirname(filename), 0o777);
   assert.throws(() => readVideoSettings(filename));
+});
+
+
+test('automatic ceilings at 1 Mbps retain selected fps but cap effective delivery at 15 fps',t=>{
+ const store=profile().createVideoSettings(fixture(t));store.update({revision:0,bitRate:3000000,maxFps:30});
+ store.configureAutomatic({revision:0,profileRevision:1,enabled:true});
+ const policy=store.automaticSnapshot();
+ const next=store.update({revision:store.snapshot().revision,policyRevision:policy.revision,bitRate:1000000,maxFps:30});
+ assert.equal(next.maxFps,15);assert.equal(store.automaticSnapshot().ceilingMaxFps,30);
+});
+
+
+test('automatic-only320/450 and10fps cannot be selected manually;6/10Mbps persist',t=>{
+ const store=profile().createVideoSettings(fixture(t));
+ for(const bitRate of [320000,450000])assert.throws(()=>store.update({revision:0,bitRate,maxFps:15}),e=>e.status===400);
+ assert.throws(()=>store.update({revision:0,bitRate:720000,maxFps:10}),e=>e.status===400);
+ for(const bitRate of [6000000,10000000])store.update({revision:store.snapshot().revision,bitRate,maxFps:30});
+ const policy=store.configureAutomatic({revision:0,profileRevision:store.snapshot().revision,enabled:true});
+ for(const bitRate of [450000,320000]){const next=store.adapt({revision:store.snapshot().revision,bitRate,maxFps:10},policy.revision);assert.equal(next.maxFps,10);}
+ assert.equal(store.automaticSnapshot().ceilingBitRate,10000000);assert.equal(store.automaticSnapshot().ceilingMaxFps,30);
+ assert.throws(()=>store.adapt({revision:store.snapshot().revision,bitRate:1000000,maxFps:10},policy.revision));
+ store.configureAutomatic({revision:policy.revision,profileRevision:store.snapshot().revision,enabled:false});
+ assert.equal(store.snapshot().bitRate,10000000);assert.equal(store.snapshot().maxFps,30);
 });

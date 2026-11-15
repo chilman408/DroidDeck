@@ -1,92 +1,64 @@
 // SPDX-License-Identifier: GPL-3.0-only
-const test = require('node:test'), assert = require('node:assert/strict');
-const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
-const { createVideoSettings, readVideoSettings } = require('./video-settings');
-const { createAdaptiveVideo } = require('./adaptive-video');
-function fixture(t, profile = { bitRate: 4000000, maxFps: 60 }) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dd-adaptive-')); fs.chmodSync(dir, 0o700);
-  t.after(() => fs.rmSync(dir, { force: true, recursive: true }));
-  const file = path.join(dir, 'video.json'), store = createVideoSettings(file);
-  store.update({ revision: 0, ...profile });
-  let now = 0, packets = 0, bytes = 0;
-  const controller = createAdaptiveVideo({ store, clock: () => now });
-  const sample = (changes = {}, authority = 'primary') => {
-    now += 2000; packets += 20; bytes += 60000;
-    return controller.observe({ available: true, flow: true, streamId: 'a'.repeat(16), ackedPackets: packets,
-      acknowledgedBytes: bytes, pendingFrames: 0, pendingBytes: 0, oldestMs: 0, ackDelayMs: 50, ...changes }, authority);
-  };
-  const enable = () => store.configureAutomatic({ revision: store.automaticSnapshot().revision, profileRevision: store.snapshot().revision, enabled: true });
-  return { file, store, controller, sample, enable };
+const test=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {createVideoSettings,readVideoSettings}=require('./video-settings');
+const {createAdaptiveVideo}=require('./adaptive-video');
+function fixture(t,targets={bitRate:4000000,maxFps:60}){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dm-responsive-'));fs.chmodSync(dir,0o700);t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const file=path.join(dir,'video.json'),store=createVideoSettings(file);store.update({revision:0,...targets});
+ let now=0,packets=0,bytes=0;const controller=createAdaptiveVideo({store,clock:()=>now});
+ const sample=(changes={},authority='primary',step=1000,byteDelta=750000)=>{now+=step;packets+=20;bytes+=byteDelta;return controller.observe({available:true,flow:true,streamId:'a'.repeat(16),ackedPackets:packets,acknowledgedBytes:bytes,pendingFrames:0,pendingBytes:0,oldestMs:0,ackDelayMs:50,...changes},authority);};
+ const enable=()=>store.configureAutomatic({revision:store.automaticSnapshot().revision,profileRevision:store.snapshot().revision,enabled:true});
+ const reduce=(bitRate=1000000,maxFps=15)=>store.adapt({revision:store.snapshot().revision,bitRate,maxFps},store.automaticSnapshot().revision);
+ return{file,store,controller,sample,enable,reduce};
 }
-test('manual default never adapts; automatic congestion is sustained and rate limited, recovery is gradual and capped', t => {
-  const f = fixture(t), bad = { oldestMs: 1200, ackDelayMs: 1000, pendingFrames: 30 };
-  for (let n = 0; n < 5; n++) f.sample(bad);
-  assert.equal(f.store.snapshot().bitRate, 4000000); f.enable();
-  assert.equal(f.sample(bad), null); assert.equal(f.sample(bad), null);
-  assert.equal(f.sample(bad).bitRate, 3000000);
-  for (let n = 0; n < 2; n++) f.sample(bad);
-  assert.equal(f.store.snapshot().bitRate, 3000000);
-  f.sample(bad); assert.equal(f.store.snapshot().bitRate, 2000000);
-  for (let n = 0; n < 20; n++) f.sample(bad);
-  assert.deepEqual([f.store.snapshot().bitRate, f.store.snapshot().maxFps], [1000000, 30]);
-  for (let n = 0; n < 26; n++) f.sample();
-  assert.deepEqual([f.store.snapshot().bitRate, f.store.snapshot().maxFps], [1000000, 45]);
-  for (let n = 0; n < 150; n++) f.sample();
-  assert.deepEqual([f.store.snapshot().bitRate, f.store.snapshot().maxFps], [4000000, 60]);
-});
-test('idle, missing feedback, changed authority/stream and malformed samples cannot promote quality or accumulate prior evidence', t => {
-  const f = fixture(t); f.enable(); const bad = { oldestMs: 1200 };
-  f.sample(bad); f.sample(bad); f.sample(bad); assert.equal(f.store.snapshot().bitRate, 3000000);
-  for (let n = 0; n < 60; n++) f.sample({ ackedPackets: 0, acknowledgedBytes: 0 });
-  assert.equal(f.store.snapshot().bitRate, 3000000);
-  for (let n = 0; n < 20; n++) f.sample({ available: false });
-  f.sample(bad, 'new-owner'); f.sample(bad, 'other-owner');
-  f.sample({ ...bad, streamId: 'b'.repeat(16) }); f.sample({ ...bad, pendingFrames: NaN });
-  assert.equal(f.store.snapshot().bitRate, 3000000);
-});
-test('manual choice disables automatic even at the same effective targets; stale policy writes cannot override it', t => {
-  const f = fixture(t); f.enable(); const policy = f.store.automaticSnapshot();
-  f.sample({ oldestMs: 1000 }); f.sample({ oldestMs: 1000 }); f.sample({ oldestMs: 1000 });
-  const profile = f.store.snapshot(); f.store.update({ revision: profile.revision, bitRate: profile.bitRate, maxFps: profile.maxFps });
-  assert.equal(f.store.automaticSnapshot().enabled, false);
-  assert.throws(() => f.store.adapt({ revision: profile.revision, bitRate: 1000000, maxFps: 30 }, policy.revision), /authority changed/);
-  assert.throws(() => f.store.configureAutomatic({ revision: policy.revision, profileRevision: profile.revision, enabled: true }), e => e.status === 409);
-  for (let n = 0; n < 30; n++) f.sample({ oldestMs: 5000 });
-  assert.equal(f.store.snapshot().bitRate, profile.bitRate);
-});
-test('automatic policy persists separately; disabling restores selected ceilings and the encoder file remains original schema', t => {
-  const f = fixture(t); f.enable();
-  f.sample({ oldestMs: 1000 }); f.sample({ oldestMs: 1000 }); f.sample({ oldestMs: 1000 });
-  const reopened = createVideoSettings(f.file), policy = reopened.automaticSnapshot(), profile = reopened.snapshot();
-  assert.equal(policy.enabled, true); assert.equal(profile.bitRate, 3000000);
-  assert.deepEqual(Object.keys(readVideoSettings(f.file)).sort(), ['bitRate','maxFps','revision','version']);
-  assert.throws(() => reopened.configureAutomatic({ revision: policy.revision, profileRevision: profile.revision, enabled: false, shell: 'x' }), e => e.status === 400);
-  reopened.configureAutomatic({ revision: policy.revision, profileRevision: profile.revision, enabled: false });
-  assert.deepEqual([reopened.snapshot().bitRate, reopened.snapshot().maxFps], [4000000, 60]);
-  assert.equal(reopened.automaticSnapshot().enabled, false);
-  fs.writeFileSync(f.file.replace('.json','-automatic.json'), '{}');
-  assert.throws(() => createVideoSettings(f.file), /automatic video policy/);
-});
+const bad={oldestMs:500,ackDelayMs:350,pendingFrames:4,pendingBytes:200000};
+const severe={oldestMs:2000,ackDelayMs:1600,pendingFrames:10,pendingBytes:500000};
 
-
-test('severe backlog cuts multiple bitrate steps and frame rate within the next valid poll, with a bounded cooldown', t => {
-  const f = fixture(t, { bitRate: 12000000, maxFps: 60 }); f.enable();
-  f.sample();
-  const down = f.sample({ oldestMs: 2500, ackDelayMs: 2200 });
-  assert.deepEqual([down.bitRate, down.maxFps], [1000000, 30]);
-  assert.equal(f.sample({ oldestMs: 2500 }), null);
-  for (let i = 0; i < 15; i++) f.sample();
-  assert.equal(f.store.snapshot().bitRate, 1000000, 'Recovery remains conservative after a fast cut');
+test('manual mode is unchanged; sustained congestion cuts within two samples and preserves ceilings',t=>{
+ const f=fixture(t);for(let i=0;i<4;i++)f.sample(severe);assert.equal(f.store.snapshot().bitRate,4000000);f.enable();f.sample();
+ assert.equal(f.sample(bad),null);const down=f.sample(bad);assert.equal(down.bitRate,3000000);assert.equal(down.maxFps,30);
+ assert.equal(f.store.automaticSnapshot().ceilingBitRate,4000000);assert.equal(f.store.automaticSnapshot().ceilingMaxFps,60);
 });
-
-test('stalled ACKs cut a severe link in half without invented throughput or waiting twelve seconds', t => {
-  const f = fixture(t, { bitRate: 8000000, maxFps: 60 }); f.enable();
-  f.sample({ ackedPackets: 0, acknowledgedBytes: 0 });
-  const down = f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2200 });
-  assert.deepEqual([down.bitRate, down.maxFps], [4000000, 30]);
-  assert.equal(f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2500 }), null);
-  f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2500 });
-  assert.equal(f.store.snapshot().bitRate, 2000000, 'Severe congestion can cut again after four seconds');
-  f.sample({ ackedPackets: 0, acknowledgedBytes: 0, oldestMs: 2500 });
-  assert.equal(f.store.snapshot().bitRate, 2000000);
+test('severe loaded congestion may jump to320kbps/10fps within the next poll; saved targets remain restorable',t=>{
+ const f=fixture(t,{bitRate:12000000,maxFps:60});const policy=f.enable();f.sample();const down=f.sample(severe,'primary',1000,60000);
+ assert.deepEqual([down.bitRate,down.maxFps],[320000,10]);
+ f.store.configureAutomatic({revision:policy.revision,profileRevision:down.revision,enabled:false});assert.deepEqual([f.store.snapshot().bitRate,f.store.snapshot().maxFps],[12000000,60]);
+});
+test('no-ACK backlog cuts repeatedly with a two-second cooldown; minimum is automatic320/10',t=>{
+ const f=fixture(t,{bitRate:8000000,maxFps:60});f.enable();f.sample({ackedPackets:0,acknowledgedBytes:0});
+ const stalled={...severe,ackedPackets:0,acknowledgedBytes:0};assert.equal(f.sample(stalled).bitRate,4000000);assert.equal(f.sample(stalled),null);
+ assert.equal(f.sample(stalled).bitRate,2000000);for(let i=0;i<20;i++)f.sample(stalled);assert.deepEqual([f.store.snapshot().bitRate,f.store.snapshot().maxFps],[320000,10]);
+});
+test('quiet but fresh delivery probes after3 healthy seconds without a throughput ceiling or1Mbps deadlock',t=>{
+ const f=fixture(t,{bitRate:3000000,maxFps:30});f.enable();f.reduce();f.sample({},'primary',1000,4096);
+ for(let i=0;i<3;i++)f.sample({},'primary',1000,4096);assert.equal(f.store.snapshot().bitRate,1000000);
+ const up=f.sample({},'primary',1000,4096);assert.deepEqual([up.bitRate,up.maxFps],[2000000,30]);
+ for(let i=0;i<12;i++)f.sample({},'primary',1000,4096);assert.equal(f.store.snapshot().bitRate,3000000);
+});
+test('a failed upward probe rolls back promptly and cannot immediately oscillate upward',t=>{
+ const f=fixture(t);f.enable();f.reduce();for(let i=0;i<5;i++)f.sample();assert.equal(f.store.snapshot().bitRate,2000000);
+ const back=f.sample(bad);assert.equal(back.bitRate,1000000);assert.equal(back.maxFps,15);for(let i=0;i<8;i++)f.sample();assert.equal(f.store.snapshot().bitRate,1000000);
+});
+test('high baseline RTT alone is not congestion; genuine backlog relative to it still reduces',t=>{
+ const f=fixture(t);f.enable();const high={ackDelayMs:650,oldestMs:650,pendingFrames:2,pendingBytes:32000};for(let i=0;i<7;i++)f.sample(high);assert.equal(f.store.snapshot().bitRate,4000000);
+ const down=f.sample({...severe,oldestMs:2300,ackDelayMs:1900});assert.ok(down.bitRate<4000000);
+});
+test('idle, malformed feedback and authority changes cannot carry healthy evidence into a new owner',t=>{
+ const f=fixture(t);f.enable();f.reduce();for(let i=0;i<3;i++)f.sample();f.sample({},'new-owner');f.sample({},'new-owner');f.sample({},'new-owner');assert.equal(f.store.snapshot().bitRate,1000000);
+ for(let i=0;i<12;i++)f.sample({available:false});assert.equal(f.store.snapshot().bitRate,1000000);
+ for(const changes of [{pendingBytes:NaN},{ackedPackets:-1},{streamId:'bad'},{flow:false}]){f.sample(changes);assert.equal(f.store.snapshot().bitRate,1000000);}
+});
+test('tiny receipt noise and intermittent delivery cannot manufacture a healthy window',t=>{
+ const f=fixture(t);f.enable();f.reduce();for(let i=0;i<20;i++)f.sample({},'primary',1000,1);assert.equal(f.store.snapshot().bitRate,1000000);
+ f.controller.reset();for(let i=0;i<15;i++)f.sample(i%2?{}:{available:false});assert.equal(f.store.snapshot().bitRate,1000000);
+});
+test('sub-window polling retains measurements and reaches a ceiling without changing its stored schema',t=>{
+ const f=fixture(t,{bitRate:2000000,maxFps:30});f.enable();f.reduce();for(let i=0;i<14;i++)f.sample({},'primary',500,2048);
+ assert.deepEqual([f.store.snapshot().bitRate,f.store.snapshot().maxFps],[2000000,30]);assert.deepEqual(Object.keys(readVideoSettings(f.file)).sort(),['bitRate','maxFps','revision','version']);
+});
+test('manual1Mbps can retain60fps but automatic caps15 and disabling restores its explicit ceiling',t=>{
+ const f=fixture(t,{bitRate:1000000,maxFps:60});const p=f.enable();for(let i=0;i<20;i++)f.sample();assert.equal(f.store.snapshot().maxFps,15);
+ assert.throws(()=>f.store.adapt({revision:f.store.snapshot().revision,bitRate:2000000,maxFps:30},p.revision),e=>e.status===409);
+ f.store.configureAutomatic({revision:p.revision,profileRevision:f.store.snapshot().revision,enabled:false});assert.equal(f.store.snapshot().maxFps,60);
 });

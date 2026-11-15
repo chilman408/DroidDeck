@@ -36,7 +36,7 @@
     global.clearTimeout(this._updateTimer);
     if (this.activeSectionId !== 'updates') return render.apply(this, args);
     const generation = ++this._renderToken;
-    this._setActiveDropdown(null); this.content.replaceChildren(text('h2', 'DroidDeck updates'));
+    this._setActiveDropdown(null); this.content.replaceChildren(text('h2', 'DroidMate updates'));
     this.content.dataset.updates = '';
     try {
       const state = await this._updateRequest();
@@ -51,7 +51,7 @@
     }
   };
   prototype._paintUpdates = function (state) {
-    this.content.replaceChildren(text('h2', 'DroidDeck updates'), text('p', 'Installed version: ' + state.installedVersion));
+    this.content.replaceChildren(text('h2', 'DroidMate updates'), text('p', 'Installed version: ' + state.installedVersion));
     this.content.dataset.updates = '';
     this.content.appendChild(text('p', 'Pilot channel · Official signed releases. Android apps and data are preserved.'));
     const primary = this.displayController?.remoteDisplayState?.canControl === true;
@@ -82,11 +82,11 @@
     button('Check for updates', { action: 'check' });
     const id = () => Array.from(global.crypto.getRandomValues(new Uint8Array(16)), x => x.toString(16).padStart(2, '0')).join('');
     if (state.available) button('Install ' + state.available.version, () => ({ action: 'install', token: state.available.token, requestId: id() }),
-      'Install DroidDeck ' + state.available.version + '? Streaming will briefly disconnect. Android apps and data will be preserved.');
+      'Install DroidMate ' + state.available.version + '? Streaming will briefly disconnect. Android apps and data will be preserved.');
     if (state.rollback) button('Roll back update', () => ({ action: 'rollback', token: state.rollback, requestId: id() }),
       'Restore the original RC2 gateway? Android apps and data will be preserved. The original version may not have Updates in Settings.');
     if (!primary) this.content.appendChild(text('p', 'Use the primary display to check, install or roll back updates.'));
-    this.content.appendChild(text('p', 'Streaming reconnects during installation. If the original version returns after rollback, reopen your usual DroidDeck address.'));
+    this.content.appendChild(text('p', 'Streaming reconnects during installation. If the original version returns after rollback, reopen your usual DroidMate address.'));
     if (busy(state)) this._updateTimer = global.setTimeout(() => this._renderActiveSection(), 2500);
   };
 })(window);

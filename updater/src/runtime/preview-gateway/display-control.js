@@ -13,7 +13,8 @@ const DESIRED = ["width", "height", "density", "resolutionPreset", "isResponsive
 const failure = (message, status = 409) => Object.assign(new Error(message), { status });
 function createDisplayControl({ helper, clock = { now: Date.now, setTimeout, clearTimeout },
   randomBytes = crypto.randomBytes, graceMs = 5000, rearSettings, retireAuthority,
-  retireTimeoutMs = 10000 } = {}) {
+  retireTimeoutMs = 10000, masterViewOnly = false } = {}) {
+  if (typeof masterViewOnly !== "boolean") throw Error("Invalid master/view-only policy");
   if (rearSettings && typeof retireAuthority !== "function") throw new Error("Rear display requires authority retirement");
   if (!Number.isSafeInteger(retireTimeoutMs) || retireTimeoutMs < 1 || retireTimeoutMs > 30000) {
     throw new Error("Invalid authority retirement timeout");
@@ -34,6 +35,7 @@ function createDisplayControl({ helper, clock = { now: Date.now, setTimeout, cle
     if (!rear?.enabled) return sessions.has(owner) ? owner : candidates[0]?.token || null;
     // An already-preferred owner retains its normal reconnect grace.
     if (sessions.get(owner)?.role === preferredRole(rear)) return owner;
+    if (masterViewOnly) return candidates.find(value => value.role === "primary")?.token || null;
     return candidates.find(value => value.role === preferredRole(rear))?.token ||
       (sessions.has(owner) ? owner : candidates[0]?.token || null);
   };
@@ -97,7 +99,7 @@ function createDisplayControl({ helper, clock = { now: Date.now, setTimeout, cle
   function snapshot(token) {
     session(token);
     if (!actual) throw failure("Display helper unavailable", 503);
-    const canControl = owner === token && !actual.recoveryRequired && !transfer && !authorityFailed;
+    const canControl = owner === token && (!masterViewOnly || session(token).role === "primary") && !actual.recoveryRequired && !transfer && !authorityFailed;
     return { ...LEGACY, ...actual, generation, displayControlSupported: 1,
       ...(rear ? { rearDisplayControlSupported: 1, displayRoleClaimSupported: 1, isRearDisplayEnabled: rear.enabled ? 1 : 0,
         isRearDisplayPrioritised: rear.prioritised ? 1 : 0, rearDisplayRevision: rear.revision,

@@ -43,7 +43,7 @@ test('video settings are owner-only, same-origin, CSRF protected and never arbit
 });
 
 
-test('Automatic quality has exact origin/owner/CSRF/revision and closed JSON requirements; manual changes take over', async t => {
+test('Automatic quality has exact origin/owner/CSRF/revision and closed JSON requirements; manual ceiling changes preserve automatic policy', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dd-auto-routes-')); fs.chmodSync(directory, 0o700);
   fs.writeFileSync(path.join(directory, 'index.html'), 'test');
   const store = require('./video-settings').createVideoSettings(path.join(directory, 'video.json'));
@@ -68,7 +68,7 @@ test('Automatic quality has exact origin/owner/CSRF/revision and closed JSON req
   const accepted = await post(body); assert.equal(accepted.status, 200); assert.equal((await accepted.json()).policy.enabled, true);
   assert.equal((await post(body)).status, 409);
   const read = await fetch(base + '/api/videoAutomatic', { headers: { 'X-Display-Session': viewer.token } }); assert.equal(read.status, 200);
-  const manual = await post({ revision: 0, bitRate: 3000000, maxFps: 30 }, owner, {}, '/api/videoState'); assert.equal(manual.status, 200);
-  assert.equal(store.automaticSnapshot().enabled, false); assert.equal(store.snapshot().bitRate, 3000000);
+  const manual = await post({ revision: 0, policyRevision: 1, bitRate: 3000000, maxFps: 30 }, owner, {}, '/api/videoState'); assert.equal(manual.status, 200);
+  assert.equal(store.automaticSnapshot().enabled, true); assert.equal(store.automaticSnapshot().ceilingBitRate, 3000000); assert.ok(store.snapshot().bitRate <= 3000000);
   display.revokeAll(); assert.equal((await post({ ...body, revision: 2, profileRevision: 1 })).status, 403);
 });
