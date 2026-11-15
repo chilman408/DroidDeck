@@ -76,3 +76,14 @@ test('real Settings overlay keeps player alive and preserves controls, authority
  assert.equal(await page.locator('[data-audio-format]').count(),1);assert.equal(await page.getByText('Service error',{exact:true}).count(),0);
  assert.deepEqual(await page.evaluate(()=>pauseCalls),[]);assert.deepEqual(errors,[]);
 });
+
+
+test('deferred production script order attaches player hooks after Home and Shell load',async t=>{
+ const browser=await chromium.launch({executablePath:process.env.EDGE_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});t.after(()=>browser.close());
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const scripts=['js/core/shared.js','js/display/display-renderer-manager.js','js/settings/settings-controller.js','OVERLAY','js/home/home-controller.js','js/shell/shell-controller.js'];
+ await page.route('http://deferred.test/**',route=>{const name=new URL(route.request().url()).pathname.slice(1);if(name==='')return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head>'+scripts.map((n,i)=>'<script defer src="/'+i+'.js"></script>').join('')+'</head><body><button id="home-settings-button"><span>settings</span></button></body></html>'});const i=Number(name.split('.')[0]);const body=scripts[i]==='OVERLAY'?fs.readFileSync(path.resolve(__dirname,'../runtime/preview-gateway/browser-settings-overlay.js')):fs.readFileSync(path.join(frontend,scripts[i]));return route.fulfill({contentType:'text/javascript',body});});
+ await page.goto('http://deferred.test/',{waitUntil:'load'});
+ assert.equal(await page.evaluate(()=>TAHtml.ShellController.prototype.setPage.toString().includes('_dmOverlay.open()')),true);
+ assert.equal(await page.locator('#home-settings-button svg').count(),1);assert.deepEqual(errors,[]);
+});

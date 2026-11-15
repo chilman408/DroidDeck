@@ -11,6 +11,10 @@ const { createGateway } = require("./server");
 const frontendDir = fs.mkdtempSync(path.join(os.tmpdir(), "ta-gateway-"));
 fs.writeFileSync(path.join(frontendDir, "index.html"), "<!doctype html><title>Preview</title>");
 fs.mkdirSync(path.join(frontendDir, "js"));
+fs.mkdirSync(path.join(frontendDir, "css"));
+fs.writeFileSync(path.join(frontendDir, "css/app.css"), "body{margin:0}");
+fs.mkdirSync(path.join(frontendDir, "js/display"));
+fs.writeFileSync(path.join(frontendDir, "js/display/display-renderer-manager.js"), "window.generatedRenderer = true;");
 fs.writeFileSync(path.join(frontendDir, "js", "app.js"), "window.preview = true;");
 fs.mkdirSync(path.join(frontendDir, ".git"));
 fs.writeFileSync(path.join(frontendDir, ".git", "config"), "secret repository metadata");
@@ -143,4 +147,14 @@ test("refuses non-loopback backend targets", () => {
     display: "ws://127.0.0.1:19091",
     touchscreen: "ws://127.0.0.1:19999",
   } }), /backend must/);
+});
+
+
+test('startup delivery is font-independent without modifying the protected HTML', async () => {
+  const css = await fetch(base+'/css/app.css');assert.equal(css.status,200);const body=await css.text();
+  assert.match(body,/dm-logo-enter/);assert.match(body,/font-size:0!important/);assert.match(body,/data:image\/svg\+xml/);
+  assert.equal(css.headers.get('content-length'),String(Buffer.byteLength(body)));assert.equal(css.headers.get('cache-control'),'no-store');
+  const head=await fetch(base+'/css/app.css',{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');assert.equal(head.headers.get('content-length'),css.headers.get('content-length'));
+  const script=await (await fetch(base+'/js/display/display-renderer-manager.js')).text();assert.match(script,/window.generatedRenderer = true/);assert.match(script,/MutationObserver/);assert.match(script,/data-video-frames/);
+  assert.equal(await (await fetch(base+'/')).text(),fs.readFileSync(path.join(frontendDir,'index.html'),'utf8'));
 });

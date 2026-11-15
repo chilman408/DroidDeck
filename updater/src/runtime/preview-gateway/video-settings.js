@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const VIDEO_SETTINGS_FILE = '/home/hilman/.config/teslaandroid-waydroid/browser-video.json';
+const VIDEO_SETTINGS_FILE = '/home/hilman/.config/teslaandroid-waydroid/browser-video-v2.json';
 const BIT_RATES = Object.freeze([320000, 450000, 720000, 1000000, 2000000, 3000000, 4000000, 6000000, 8000000, 10000000, 12000000]);
 const FRAME_RATES = Object.freeze([10, 15, 30, 45, 60]);
 const MANUAL_BIT_RATES = Object.freeze(BIT_RATES.filter(rate => rate >= 720000));
@@ -36,6 +36,14 @@ function readVideoSettings(filename, { uid = process.getuid?.(), validate = vali
     return validate(JSON.parse(bytes.subarray(0, size).toString('utf8')));
   } finally { fs.closeSync(fd); }
 }
+// New targets (320k, 6/10M and 10fps) must never be written into the
+// immutable predecessor's profile: its CPU recovery worker rejects them.
+function readVersionedVideoSettings(filename, options = {}) {
+  const legacy = filename.replace(/browser-video-v2(?=(-automatic)?\.json$)/, 'browser-video');
+  if (legacy === filename) return readVideoSettings(filename, options);
+  const state = readVideoSettings(filename, { ...options, missing: { missingVersionedVideo: true } });
+  return state.missingVersionedVideo === true ? readVideoSettings(legacy, options) : state;
+}
 function writeSettings(filename, next) {
   const temporary = filename + '.' + crypto.randomBytes(8).toString('hex') + '.tmp';
   let fd;
@@ -54,8 +62,8 @@ function validateAutomatic(state) {
 }
 function createVideoSettings(filename) {
   const automaticFile = filename.replace(/\.json$/, '') + '-automatic.json';
-  const snapshot = () => readVideoSettings(filename);
-  const automaticSnapshot = () => readVideoSettings(automaticFile, { validate: validateAutomatic,
+  const snapshot = () => readVersionedVideoSettings(filename);
+  const automaticSnapshot = () => readVersionedVideoSettings(automaticFile, { validate: validateAutomatic,
     missing: { version: 1, revision: 0, enabled: false, ceilingBitRate: snapshot().bitRate, ceilingMaxFps: snapshot().maxFps } });
   snapshot(); automaticSnapshot();
   function targets(payload) {
@@ -117,4 +125,4 @@ function createVideoSettings(filename) {
     },
   };
 }
-module.exports = { VIDEO_SETTINGS_FILE, BIT_RATES, FRAME_RATES, MANUAL_BIT_RATES, MANUAL_FRAME_RATES, automaticFrameLimit, validateProfile, readVideoSettings, createVideoSettings };
+module.exports = { VIDEO_SETTINGS_FILE, BIT_RATES, FRAME_RATES, MANUAL_BIT_RATES, MANUAL_FRAME_RATES, automaticFrameLimit, validateProfile, readVideoSettings, readVersionedVideoSettings, createVideoSettings };

@@ -73,8 +73,60 @@ function sign(raw, statement, expected) {
   if (!c.verify(null, statement, c.createPublicKey(key), signature)) throw Error('Release signature failed verification');
   return { ...identity, signature: signature.toString('base64'), statementSha256: expected, releaseSigned: true };
 }
+function signCaptureCandidate(raw, statement, expected) {
+  const key = open(raw), identity = publicKey(key);
+  if (!Buffer.isBuffer(statement) || statement.length < 1 || statement.length > 8192 || sha(statement) !== expected) throw Error('Exact reviewed capture statement required');
+  const value = JSON.parse(statement);
+  exact(value, ['schema', 'kind', 'channel', 'keySha256', 'bundleSha256', 'manifestSha256', 'sourceRevision',
+    'runtimeVersion', 'compatibleReleaseSha256', 'contractSha256', 'purpose', 'activationAllowed']);
+  if (value.schema !== 1 || value.kind !== 'droiddeck-capture-runtime-attestation' || value.channel !== 'pilot' ||
+      value.keySha256 !== identity.keySha256 || value.purpose !== 'staging-only' || value.activationAllowed !== false ||
+      value.compatibleReleaseSha256 !== '1b81d77c394ffab2875511237e8346893519db28274496039811fac7b8aca84a' ||
+      !['bundleSha256', 'manifestSha256', 'contractSha256'].every(k => typeof value[k] === 'string' && /^[a-f0-9]{64}$/.test(value[k])) ||
+      typeof value.sourceRevision !== 'string' || !/^[a-f0-9]{40}$/.test(value.sourceRevision) ||
+      value.runtimeVersion !== '0.1.1-rc.20' ||
+      !Buffer.from(canon(value)).equals(statement)) throw Error('Closed nonactivating capture domain required');
+  const signature = c.sign(null, statement, key);
+  if (!c.verify(null, statement, c.createPublicKey(key), signature)) throw Error('Capture signature failed verification');
+  return { ...identity, signature: signature.toString('base64'), statementSha256: expected, captureCandidateSigned: true, activationAllowed: false };
+}
+function signCaptureActivation(raw, statement, expected) {
+  const key=open(raw), identity=publicKey(key);
+  if (!Buffer.isBuffer(statement) || !statement.length || statement.length>8192 || sha(statement)!==expected) throw Error('Exact reviewed activation statement required');
+  const value=JSON.parse(statement);
+  exact(value,['schema','kind','channel','purpose','activationAllowed','keySha256','packageSha256','manifestSha256',
+    'componentSha256','controlSourcesSha256','sourceRevision','compatibleReleaseSha256','contractSha256']);
+  if (value.schema!==1 || value.kind!=='droiddeck-capture-activation-authorization' || value.channel!=='pilot' ||
+      value.purpose!=='guarded-capture-activation' || value.activationAllowed!==true || value.keySha256!==identity.keySha256 ||
+      value.compatibleReleaseSha256!=='1b81d77c394ffab2875511237e8346893519db28274496039811fac7b8aca84a' ||
+      !['packageSha256','manifestSha256','componentSha256','controlSourcesSha256','contractSha256'].every(k=>typeof value[k]==='string' && /^[a-f0-9]{64}$/.test(value[k])) ||
+      typeof value.sourceRevision!=='string' || !/^[a-f0-9]{40}$/.test(value.sourceRevision) ||
+      !Buffer.from(canon(value)).equals(statement)) throw Error('Closed guarded activation domain required');
+  const signature=c.sign(null,statement,key);
+  if (!c.verify(null,statement,c.createPublicKey(key),signature)) throw Error('Activation signature failed verification');
+  return {...identity,signature:signature.toString('base64'),statementSha256:expected,activationAuthorizationSigned:true,servicesChanged:false};
+}
+function signAggregate(raw, statement, expected, release = 'RC17') {
+  if (!['RC17','RC18'].includes(release)) throw Error('Closed aggregate release required');
+  const key=open(raw), identity=publicKey(key);
+  if (!Buffer.isBuffer(statement) || !statement.length || statement.length>8192 || sha(statement)!==expected) throw Error('Exact reviewed aggregate statement required');
+  const value=JSON.parse(statement);
+  exact(value,['schema','kind','channel','aggregateRelease','coreRuntimeVersion','compatibleReleaseSha256',
+    'activationAllowed','keySha256','packageSha256','manifestSha256','sourceRevision','sourceInventorySha256','contractSha256']);
+  if (value.schema!==1 || value.kind!=='droidmate-aggregate-release-authorization' || value.channel!=='pilot' ||
+      value.aggregateRelease!==release || value.coreRuntimeVersion!=='0.1.1-rc.20' || value.activationAllowed!==true ||
+      value.keySha256!==identity.keySha256 ||
+      value.compatibleReleaseSha256!=='1b81d77c394ffab2875511237e8346893519db28274496039811fac7b8aca84a' ||
+      value.contractSha256!=='40baefbcecf7d9b95b4457d283bd6951bbe90fc8da4926eb680778ce4721d394' ||
+      !['packageSha256','manifestSha256','sourceInventorySha256'].every(k=>typeof value[k]==='string' && /^[a-f0-9]{64}$/.test(value[k])) ||
+      typeof value.sourceRevision!=='string' || !/^[a-f0-9]{40}$/.test(value.sourceRevision) ||
+      !Buffer.from(canon(value)).equals(statement)) throw Error('Closed preserving aggregate domain required');
+  const signature=c.sign(null,statement,key);
+  if (!c.verify(null,statement,c.createPublicKey(key),signature)) throw Error('Aggregate signature failed verification');
+  return {...identity,signature:signature.toString('base64'),statementSha256:expected,aggregateAuthorizationSigned:true,servicesChanged:false};
+}
 function operation(request) {
-  if (!request || !['generate', 'verify', 'sign', 'backup', 'verifyBackup'].includes(request.mode)) throw Error('Fixed signing operation required');
+  if (!request || !['generate', 'verify', 'sign', 'signCaptureCandidate', 'signCaptureActivation', 'signAggregate', 'signSuccessor', 'backup', 'verifyBackup'].includes(request.mode)) throw Error('Fixed signing operation required');
   if (request.mode === 'verifyBackup') return verifyBackup(request.backup, request.passphrase, request.expectedKeySha256);
   const pair = request.mode === 'generate' ? c.generateKeyPairSync('ed25519') : null;
   const raw = pair ? pair.privateKey.export({ format: 'der', type: 'pkcs8' }) : Buffer.from(request.private, 'base64');
@@ -82,6 +134,10 @@ function operation(request) {
     const key = open(raw); selfTest(key);
     const result = { ...publicKey(key), selfTest: true };
     if (pair) result.private = raw.toString('base64');
+    if (request.mode === 'signSuccessor') return { ...result, ...signAggregate(raw, Buffer.from(request.statement, 'base64'), request.expectedStatementSha256, 'RC18') };
+    if (request.mode === 'signAggregate') return { ...result, ...signAggregate(raw, Buffer.from(request.statement, 'base64'), request.expectedStatementSha256) };
+    if (request.mode === 'signCaptureActivation') return { ...result, ...signCaptureActivation(raw, Buffer.from(request.statement, 'base64'), request.expectedStatementSha256) };
+    if (request.mode === 'signCaptureCandidate') return { ...result, ...signCaptureCandidate(raw, Buffer.from(request.statement, 'base64'), request.expectedStatementSha256) };
     if (request.mode === 'sign') return { ...result, ...sign(raw, Buffer.from(request.statement, 'base64'), request.expectedStatementSha256) };
     if (request.mode === 'backup') {
       const encrypted = backup(raw, request.passphrase);
@@ -98,4 +154,4 @@ if (require.main === module) {
     catch { process.stderr.write('Signing/backup operation refused'); process.exitCode = 1; }
   });
 }
-module.exports = { operation, backup, verifyBackup, sign, canon };
+module.exports = { operation, backup, verifyBackup, sign, signCaptureCandidate, signCaptureActivation, signAggregate, canon };

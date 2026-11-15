@@ -603,6 +603,11 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       res.setHeader('Content-Type','text/javascript; charset=utf-8');res.setHeader('Content-Length',body.length);
       res.end(req.method==='HEAD'?undefined:body);return;
     }
+    if (decoded === '/css/app.css' && ['GET','HEAD'].includes(req.method) && fs.existsSync(path.join(frontendDir,'css/app.css'))) {
+      const body=Buffer.concat([fs.readFileSync(path.join(frontendDir,'css/app.css')),Buffer.from('\n'+require('./browser-player-startup').styles())]);
+      res.setHeader('Content-Type','text/css; charset=utf-8');res.setHeader('Content-Length',body.length);
+      res.end(req.method==='HEAD'?undefined:body);return;
+    }
     const browserPolicies = {
       '/js/display/display-renderer-manager.js': 'browser-renderer-policy.js',
       '/js/settings/settings-controller.js': 'browser-settings-policy.js',
@@ -615,7 +620,8 @@ function createGateway({ frontendDir, targets = DEFAULT_TARGETS, publicOrigin, p
       const policy = fs.readFileSync(path.join(__dirname, browserPolicies[decoded]));
       const updatePolicy = decoded === '/js/settings/settings-controller.js' ?
         Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-update-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-adaptive-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-audio-policy.js')), Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname, 'browser-settings-overlay.js'))]) : Buffer.alloc(0);
-      const body = Buffer.concat([original, Buffer.from('\n;\n'), policy, updatePolicy]);
+      const startup = decoded === '/js/display/display-renderer-manager.js' ? Buffer.concat([Buffer.from('\n;\n'), fs.readFileSync(path.join(__dirname,'browser-player-startup.js'))]) : Buffer.alloc(0);
+      const body = Buffer.concat([original, Buffer.from('\n;\n'), policy, updatePolicy, startup]);
       res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       res.setHeader('Content-Length', body.length);
       res.end(req.method === 'HEAD' ? undefined : body);
@@ -821,7 +827,7 @@ async function main({ configuration, create = createGateway, args = process.argv
       lanOrigin: originUrl && net.isIP(originUrl.hostname) === 4 ? originUrl.origin : null }) : undefined;
     if (process.env.GATEWAY_VIDEO_SETTINGS !== undefined && process.env.GATEWAY_VIDEO_SETTINGS !== "1") throw new Error("Invalid video settings flag");
     const videoSettings = process.env.GATEWAY_VIDEO_SETTINGS === "1" ? require("./video-settings").createVideoSettings(
-      configuration ? preferenceFile('browser-video.json') : require("./video-settings").VIDEO_SETTINGS_FILE) : undefined;
+      configuration ? preferenceFile('browser-video-v2.json') : require("./video-settings").VIDEO_SETTINGS_FILE) : undefined;
     let gpsControl;
     const gpsSocket = configuration ? sockets + '/gps.sock' : process.env.GATEWAY_GPS_SOCKET;
     if (gpsSocket) {

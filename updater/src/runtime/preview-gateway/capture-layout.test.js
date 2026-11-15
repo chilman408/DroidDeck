@@ -6,7 +6,7 @@ test('portable capture layout shares configured identity, library and preference
   const result = captureLayout(configuration);
   assert.equal(result.root, '/opt/droiddeck'); assert.equal(result.hostLibraries, '/opt/droiddeck/libgbinder');
   assert.equal(result.user, 'deck'); assert.equal(result.uid, 1200);
-  assert.equal(result.videoSettingsFile, '/home/display/.config/droiddeck/browser-video.json');
+  assert.equal(result.videoSettingsFile, '/home/display/.config/droiddeck/browser-video-v2.json');
   assert.equal(result.audioSettingsFile, '/home/display/.config/droiddeck/browser-audio.json');
   assert.deepEqual(result.userEnvironment, ['XDG_RUNTIME_DIR=/run/user/1200', 'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1200/bus']);
   assert.equal(Object.isFrozen(result), true); assert.equal(Object.isFrozen(result.userEnvironment), true);
@@ -15,6 +15,6 @@ test('portable capture layout shares configured identity, library and preference
 test('absent configuration preserves the original capture paths and desktop identity', () => {
   const result = captureLayout();
   assert.equal(result.root, '/opt/teslaandroid-waydroid'); assert.equal(result.user, 'hilman'); assert.equal(result.uid, 1000);
-  assert.equal(result.videoSettingsFile, '/home/hilman/.config/teslaandroid-waydroid/browser-video.json');
+  assert.equal(result.videoSettingsFile, '/home/hilman/.config/teslaandroid-waydroid/browser-video-v2.json');
   assert.equal(result.audioSettingsFile, '/home/hilman/.config/teslaandroid-waydroid/browser-audio.json');
 });

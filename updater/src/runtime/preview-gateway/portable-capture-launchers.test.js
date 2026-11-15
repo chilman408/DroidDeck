@@ -6,7 +6,7 @@ const { EventEmitter } = require('node:events');
 const { normalizeRuntimeConfig } = require('../portable/runtime-config');
 const { loadWorkerConfiguration } = require('../portable/worker-config');
 const owner = 'a'.repeat(32);
-function harness(filename, rejectAccount = false) {
+function harness(filename, rejectAccount = false, policy = null) {
   const localRequire = createRequire(require.resolve(filename));
   const calls = [], profiles = [], children = [], captures = [];
   const environment = { TESLA_WAYDROID_VIDEO_SETTINGS: '1', TESLA_WAYDROID_RUNTIME_OWNER: owner, TESLA_WAYDROID_RUNTIME_ROLE: 'video' };
@@ -21,6 +21,7 @@ function harness(filename, rejectAccount = false) {
   const modules = {
     '../portable/worker-config': { loadWorkerConfiguration: options => loadWorkerConfiguration({ ...options, uid: 0,
       validateAccount: async configuration => { calls.push(['account', configuration]); if (rejectAccount) throw new Error('account mismatch'); } }) },
+    '../portable/capture-policy': {resolveCaptureSettings:environment=>localRequire('../portable/capture-policy').resolveCaptureSettings(environment,{read:()=>policy})},
     './capture-lease': { ...localRequire('./capture-lease'), prepareCapture: async (role, options) => { calls.push(['lease', role]); captures.push(options.configuration); return owner; } },
     '../waydroid-display/host-adapter': { ...localRequire('../waydroid-display/host-adapter'), execute: run,
       createHostAdapter: options => { calls.push(['adapter', options]); return { guest: async args => {
@@ -31,12 +32,14 @@ function harness(filename, rejectAccount = false) {
     'node:fs/promises': { lstat: async file => { calls.push(['artifact', file]); return { isFile: () => true, uid: file === '/proc/40000' ? 1200 : 0, mode: 0o100644, size: 20, nlink: 1 }; },
       readFile: async file => Buffer.from(file.endsWith('cmdline') ? '/usr/bin/weston\0--backend=pipewire\0--socket=wayland-teslaandroid\0' : 'fixture'), readlink: async () => '/usr/bin/weston' },
     'node:crypto': { createHash: () => ({ update: () => ({ digest: () => localRequire('./video-launcher').SERVER_SHA256 }) }) },
-    'node:child_process': { spawn: (file, args) => {
-      children.push({ file, args }); const child = new EventEmitter();
+    'node:child_process': { spawn: (file, args, options) => {
+      children.push({ file, args, options }); const child = new EventEmitter();
       child.stdout = new EventEmitter(); child.stdout.pipe = () => {}; child.kill = () => {}; child.exitCode = null; child.signalCode = null;
+      child.stdio=[null,child.stdout,null,new EventEmitter()];
       return child;
     } },
-    './video-settings': { ...localRequire('./video-settings'), readVideoSettings: (file, options) => { profiles.push({ file, ...options }); return { version: 1, revision: 22, bitRate: 3000000, maxFps: 30 }; } },
+    './video-encoding': { ...localRequire('./video-encoding'),readPreference:()=>({version:1,revision:0,preference:'auto'}),createStatusWriter:()=>()=>{} },
+    './video-settings': { ...localRequire('./video-settings'), readVersionedVideoSettings: (file, options) => { profiles.push({ file, ...options }); return { version: 1, revision: 22, bitRate: 3000000, maxFps: 30 }; } },
     './video-capture-controller': { createVideoCaptureController: options => ({ reconcile: async () => {
       const profile = await options.readProfile(); await options.prepare(); options.launch(profile);
     }, stop: async () => {} }) },
@@ -62,17 +65,24 @@ test('portable audio/video launchers validate account first and retain immutable
       assert.deepEqual(Array.from(fixture.children[0].args.slice(-2)), ['--uid', '1200']);
       assert.ok(fixture.children[0].args.includes('/opt/droiddeck/runtime/preview-gateway/compositor-h264.py'));
       const plan = JSON.parse(fixture.children[0].args.at(-3)); assert.equal(plan.bitRate, 3000000); assert.equal(plan.left, 150);
-      assert.deepEqual(fixture.profiles, [{ file: '/home/display/.config/droiddeck/browser-video.json', uid: 1200 }]);
+      assert.deepEqual(fixture.profiles, [{ file: '/home/display/.config/droiddeck/browser-video-v2.json', uid: 1200 }]);
       continue;
     }
     assert.equal(fixture.children[0].file, '/usr/bin/lxc-attach');
     assert.ok(fixture.children[0].args.includes('CLASSPATH=/data/local/tmp/tesla-waydroid-test-20261003/scrcpy-server-v4.0.jar'));
     if (filename.includes('video')) {
-      assert.deepEqual(fixture.profiles, [{ file: '/home/display/.config/droiddeck/browser-video.json', uid: 1200 }]);
+      assert.deepEqual(fixture.profiles, [{ file: '/home/display/.config/droiddeck/browser-video-v2.json', uid: 1200 }]);
       assert.ok(fixture.children[0].args.includes('video_bit_rate=3000000'));
       assert.ok(fixture.children[0].args.includes('audio=false'));
     } else assert.ok(fixture.children[0].args.includes('audio_codec=raw'));
   }
+});
+test('explicit signed encoder policy wires supervised GPU child without changing selected targets',async()=>{
+ const f=harness('./compositor-video-launcher',false,{version:2,preprocessing:'cpu',encoder:'vaapi'});
+ await f.main({configuration:{user:'deck',uid:1200,gid:1201,lanAddress:'10.20.30.40',home:'/home/display'}});
+ const child=f.children[0];assert.deepEqual(Array.from(child.options.stdio),['ignore','pipe','inherit','pipe']);
+ for(const flag of ['DROIDMATE_EXPERIMENTAL_H264_ENCODER=vaapi','DROIDMATE_ENCODER_STATUS_FD=3','DROIDDECK_EXPERIMENTAL_FRAME_PACING=bounded','DROIDDECK_EXPERIMENTAL_GPU_CAPTURE=cpu'])assert.ok(child.args.includes(flag));
+ const plan=JSON.parse(child.args.at(-3));assert.equal(plan.width,980);assert.equal(plan.height,720);assert.equal(plan.bitRate,3000000);assert.equal(plan.maxFps,30);assert.equal(plan.left,150);
 });
 test('portable launcher account failure cannot adopt captures, access artifacts or launch children', async () => {
   for (const filename of ['./audio-launcher', './video-launcher', './compositor-video-launcher']) {
