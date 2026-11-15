@@ -128,6 +128,8 @@ def prepare(predecessor,component,activation,activation_statement,activation_sig
    # `text` rebinds the forward package pin, so the predecessor anchor remains explicit.
    forward=old.replace(b'a5509f99f4f4e4a26d5ced56ee872fc7bed6f3bdc2af8826cdd181393c7d26da',sha(activation).encode())
    value=replace_exact(value,forward,new)
+  if name=='tools/aggregate-legacy-runtime.py':
+   value=replace_exact(value,b'len(raw) != 3246080',('len(raw) != '+str(len(activation))).encode())
   if name=='tools/aggregate-portable-capture.py':
    bridge=b"""    def predecessor_restored(self,op):
         predecessors={'a5509f99f4f4e4a26d5ced56ee872fc7bed6f3bdc2af8826cdd181393c7d26da':'0747a1d63f455cfcf003f326d7f9ed3c5e6de63dfee5ae4498799384d033bc92',

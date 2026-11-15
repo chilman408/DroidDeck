@@ -21,6 +21,11 @@ class SuccessorPreparation(unittest.TestCase):
   files=P.members(raw);old=P.members(predecessor);prefix='droidmate-rc18-release/source/'
   for name in ['tools/update-installer-entry.py','tools/enroll-capture-control.py','runtime/portable/capture-control-bootstrap.py','runtime/portable/aggregate-gateway.js','tools/legacy-video-namespace.py','tools/legacy-gpu-preflight.py']:
    self.assertEqual(files[prefix+name],old['droidmate-rc17-release/source/'+name])
+  legacy=P.compile_policy(files[prefix+'tools/aggregate-legacy-runtime.py'],'fixture_legacy')
+  builder=P.compile_policy(files[prefix+'tools/aggregate-browser-view.py'],'fixture_builder')
+  pins=legacy.dependency_pins(types.SimpleNamespace(assets={'capturePackage':inputs[2]},compiler=builder))
+  self.assertIn('waydroid-display/node_modules/pngjs/lib/png.js',pins)
+  for name,value in legacy.reviewed_cpu_pins().items():self.assertEqual(pins[name],value,'legacy CPU source authority must remain unchanged')
   capture=P.compile_policy(files[prefix+'tools/aggregate-portable-capture.py'],'fixture_capture')
   item={'packageSha256':'a5509f99f4f4e4a26d5ced56ee872fc7bed6f3bdc2af8826cdd181393c7d26da','phase':'restored','viewToken':'a'*32,'view':{'mode':'gpu','componentSha256':'0747a1d63f455cfcf003f326d7f9ed3c5e6de63dfee5ae4498799384d033bc92'}}
   observed=[]
