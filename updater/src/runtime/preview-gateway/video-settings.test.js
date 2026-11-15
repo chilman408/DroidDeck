@@ -78,3 +78,19 @@ test('automatic-only320/450 and10fps cannot be selected manually;6/10Mbps persis
  store.configureAutomatic({revision:policy.revision,profileRevision:store.snapshot().revision,enabled:false});
  assert.equal(store.snapshot().bitRate,10000000);assert.equal(store.snapshot().maxFps,30);
 });
+
+
+test('new effective video targets preserve immutable predecessor profile and automatic ceiling bytes', t => {
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'video-version-'));fs.chmodSync(dir,0o700);t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const legacy=path.join(dir,'browser-video.json'),legacyAuto=path.join(dir,'browser-video-automatic.json'),file=path.join(dir,'browser-video-v2.json');
+ const profile={version:1,revision:5,bitRate:4000000,maxFps:30},automatic={version:1,revision:2,enabled:true,ceilingBitRate:8000000,ceilingMaxFps:60};
+ for(const [name,value] of [[legacy,profile],[legacyAuto,automatic]])fs.writeFileSync(name,JSON.stringify(value)+'\n',{mode:0o600});
+ const before=fs.readFileSync(legacy),autoBefore=fs.readFileSync(legacyAuto),store=require('./video-settings').createVideoSettings(file);
+ assert.deepEqual(store.snapshot(),profile);assert.deepEqual(store.automaticSnapshot(),automatic);assert.equal(fs.existsSync(file),false);
+ store.adapt({revision:5,bitRate:320000,maxFps:10},2);
+ assert.equal(store.snapshot().bitRate,320000);assert.equal(store.snapshot().maxFps,10);
+ store.update({revision:6,bitRate:10000000,maxFps:60,policyRevision:2});assert.equal(store.automaticSnapshot().ceilingBitRate,10000000);
+ assert.deepEqual(fs.readFileSync(legacy),before);assert.deepEqual(fs.readFileSync(legacyAuto),autoBefore);
+ const {readVersionedVideoSettings}=require('./video-settings');assert.equal(readVersionedVideoSettings(file).maxFps,10);
+ if(process.platform!=='win32'){fs.renameSync(file,file+'.real');fs.symlinkSync(file+'.real',file);assert.throws(()=>readVersionedVideoSettings(file),'unsafe v2 must not fall through to predecessor');}
+});

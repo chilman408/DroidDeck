@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createHostAdapter, parseBootClasspaths, execute } = require("../waydroid-display/host-adapter");
 const { captureEnvironment, prepareCapture } = require("./capture-lease");
-const { readVideoSettings, validateProfile } = require("./video-settings");
+const { readVersionedVideoSettings, validateProfile } = require("./video-settings");
 const { captureLayout } = require('./capture-layout');
 const { loadWorkerConfiguration } = require('../portable/worker-config');
 const { normalizeRuntimeConfig } = require('../portable/runtime-config');
@@ -61,7 +61,7 @@ async function main({ configuration, args = process.argv.slice(2) } = {}) {
     try { await controller.stop(); } catch (failure) { console.error(failure.message); process.exitCode = 1; }
   };
   const controller = createVideoCaptureController({
-    readProfile: () => readVideoSettings(layout.videoSettingsFile, { uid }),
+    readProfile: () => readVersionedVideoSettings(layout.videoSettingsFile, { uid }),
     prepare: async () => {
       const live = (await execute("/usr/bin/lxc-info", ["-P", "/var/lib/waydroid/lxc", "-n", "waydroid", "-pH"], { env: process.env })).toString().trim();
       if (live !== pid) throw new Error("Video container identity changed");

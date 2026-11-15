@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Initialize', 'Inspect', 'ExportTrust', 'Sign', 'Backup', 'VerifyBackup')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('Initialize', 'Inspect', 'ExportTrust', 'Sign', 'SignCaptureCandidate', 'SignCaptureActivation', 'SignAggregate', 'SignSuccessor', 'Backup', 'VerifyBackup')][string]$Action,
     [string]$OutputPath,
     [string]$StatementPath,
     [string]$BundlePath,
     [string]$BackupPath,
+    [string]$PredecessorPath,
     [string]$ExpectedPublicKeySha256
 )
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,18 @@ $SystemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
 $Entropy = [Text.Encoding]::ASCII.GetBytes('DroidDeck release signing v1')
 $Names = @('private.dpapi', 'public.der', 'complete.json')
 $CryptoHelper = Join-Path $PSScriptRoot 'release-signer-crypto.js'
+$SigningActions = @('Sign', 'SignCaptureCandidate', 'SignCaptureActivation', 'SignAggregate', 'SignSuccessor')
+
+function Get-SigningPolicy([string]$Operation) {
+    switch ($Operation) {
+        'Sign' { return @{file='../runtime/portable/release-sign-inputs.py';reviewKind='droiddeck-release-signing-inputs';cryptoMode='sign'} }
+        'SignCaptureCandidate' { return @{file='../runtime/portable/capture-sign-inputs.py';reviewKind='droiddeck-capture-signing-inputs';cryptoMode='signCaptureCandidate'} }
+        'SignCaptureActivation' { return @{file='../runtime/portable/capture-activation-sign-inputs.py';reviewKind='droiddeck-capture-activation-signing-inputs';cryptoMode='signCaptureActivation'} }
+        'SignSuccessor' { return @{file='rc18-sign-inputs.py';reviewKind='droidmate-successor-signing-inputs';cryptoMode='signSuccessor'} }
+        'SignAggregate' { return @{file='aggregate-sign-inputs.py';reviewKind='droidmate-aggregate-signing-inputs';cryptoMode='signAggregate'} }
+        default { throw 'Closed public signing operation required' }
+    }
+}
 
 function Assert-Private([string]$Path) {
     $item = Get-Item -LiteralPath $Path -Force
@@ -123,8 +136,9 @@ function Public-Record($Value) {
         $Value.keySha256 + '","publicKeySpkiHex":"' + $Value.publicKeySpkiHex + '","schema":1}' + "`n"
 }
 
-if ($Action -notin @('ExportTrust', 'Sign', 'Backup') -and $OutputPath) { throw 'No output file accepted for this operation' }
-if ($Action -ne 'Sign' -and ($StatementPath -or $BundlePath)) { throw 'Release inputs require Sign' }
+if ($Action -notin @('ExportTrust', 'Sign', 'SignCaptureCandidate', 'SignCaptureActivation', 'SignAggregate', 'SignSuccessor', 'Backup') -and $OutputPath) { throw 'No output file accepted for this operation' }
+if ($Action -notin $SigningActions -and ($StatementPath -or $BundlePath)) { throw 'Release inputs require Sign' }
+if (($Action -eq 'SignSuccessor') -ne [bool]$PredecessorPath) { throw 'Successor signing requires its frozen predecessor; other operations reject that input' }
 if ($Action -ne 'VerifyBackup' -and ($BackupPath -or $ExpectedPublicKeySha256)) { throw 'Backup recovery inputs require VerifyBackup' }
 if ($Action -eq 'VerifyBackup') {
     if ($ExpectedPublicKeySha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Separately recorded public fingerprint required' }
@@ -168,14 +182,16 @@ $identity = [pscustomobject]@{keySha256=[Convert]::ToHexString([Security.Cryptog
     publicKeySpkiHex=[Convert]::ToHexString($public).ToLowerInvariant()}
 if ([IO.File]::ReadAllText((Join-Path $Root 'complete.json')) -cne (Public-Record $identity)) { throw 'Original public identity required' }
 $statement = $null
-if ($Action -eq 'Sign') {
+if ($Action -in $SigningActions) {
     $statement = Read-Bounded $StatementPath 8192
     $bundle = Read-Bounded $BundlePath (80 * 1024 * 1024)
-    $policy = Join-Path $PSScriptRoot '../runtime/portable/release-sign-inputs.py'
+    $signingPolicy = Get-SigningPolicy $Action
+    $policy = Join-Path $PSScriptRoot $signingPolicy.file
     $python = (Get-Command python.exe -CommandType Application | Select-Object -First 1).Source
-    $review = Invoke-Bridge $python @('-I', '-B', $policy) @{
-        bundle=[Convert]::ToBase64String($bundle);statement=[Convert]::ToBase64String($statement);keySha256=$identity.keySha256}
-    if ($review.kind -cne 'droiddeck-release-signing-inputs' -or $review.keySha256 -cne $identity.keySha256) { throw 'Reviewed signing inputs required' }
+    $request = @{bundle=[Convert]::ToBase64String($bundle);statement=[Convert]::ToBase64String($statement);keySha256=$identity.keySha256}
+    if ($Action -eq 'SignSuccessor') { $request.predecessor = [Convert]::ToBase64String((Read-Bounded $PredecessorPath (50 * 1024 * 1024))) }
+    $review = Invoke-Bridge $python @('-I', '-B', $policy) $request
+    if ($review.kind -cne $signingPolicy.reviewKind -or $review.keySha256 -cne $identity.keySha256) { throw 'Reviewed signing inputs required' }
 }
 $private = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes((Join-Path $Root 'private.dpapi')),
     $Entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)
@@ -185,7 +201,7 @@ if (-not $verified.selfTest -or [Convert]::ToHexString([IO.File]::ReadAllBytes((
     $verified.publicKeySpkiHex -or [IO.File]::ReadAllText((Join-Path $Root 'complete.json')) -cne (Public-Record $verified)) {
     throw 'Original signing key/public record mismatch'
 }
-if ($Action -eq 'Sign' -or $Action -eq 'Backup') {
+if ($Action -in @('Sign', 'SignCaptureCandidate', 'SignCaptureActivation', 'SignAggregate', 'SignSuccessor', 'Backup')) {
     if (-not $OutputPath -or -not [IO.Path]::IsPathFullyQualified($OutputPath)) { throw 'New absolute protected output required' }
     $output = [IO.Path]::GetFullPath($OutputPath)
     if ($output.StartsWith($Root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'No writes into original custody' }
@@ -201,8 +217,8 @@ if ($Action -eq 'Sign' -or $Action -eq 'Backup') {
     $private = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes((Join-Path $Root 'private.dpapi')),
         $Entropy, [Security.Cryptography.DataProtectionScope]::CurrentUser)
     try {
-        if ($Action -eq 'Sign') {
-            $signed = Crypto 'sign' $private @{statement=[Convert]::ToBase64String($statement);expectedStatementSha256=$review.statementSha256}
+        if ($Action -in $SigningActions) {
+            $signed = Crypto $signingPolicy.cryptoMode $private @{statement=[Convert]::ToBase64String($statement);expectedStatementSha256=$review.statementSha256}
             Write-New $output ([Convert]::FromBase64String($signed.signature))
         } else {
             $backed = Crypto 'backup' $private @{passphrase=$passphrase}
@@ -220,7 +236,20 @@ if ($Action -eq 'ExportTrust') {
         $verified.publicKeySpkiHex + '","schema":1}' + "`n"
     Write-New $output ([Text.Encoding]::ASCII.GetBytes($trust))
 }
+if ($Action -eq 'SignSuccessor') {
+    [ordered]@{kind='droidmate-successor-signing-result';algorithm='Ed25519';keySha256=$verified.keySha256;
+        statementSha256=$review.statementSha256;successorAuthorizationSigned=$true;predecessorSha256=$review.predecessorSha256;
+        plaintextPrivateKeyExported=$false;servicesChanged=$false} | ConvertTo-Json -Compress
+    return
+}
+if ($Action -eq 'SignAggregate') {
+    [ordered]@{kind='droidmate-aggregate-signing-result';algorithm='Ed25519';keySha256=$verified.keySha256;
+        statementSha256=$review.statementSha256;aggregateAuthorizationSigned=$true;
+        plaintextPrivateKeyExported=$false;servicesChanged=$false} | ConvertTo-Json -Compress
+    return
+}
 [ordered]@{kind='droiddeck-signing-custody';algorithm='Ed25519';keySha256=$verified.keySha256;
     publicKeySpkiHex=$verified.publicKeySpkiHex;windowsCurrentUserProtectionVerified=$true;
     signingSelfTestPassed=$true;plaintextPrivateKeyExported=$false;releaseSigned=($Action -eq 'Sign');
+    captureCandidateSigned=($Action -eq 'SignCaptureCandidate');activationAuthorizationSigned=($Action -eq 'SignCaptureActivation');activationAllowed=$false;
     portableEncryptedBackupCreated=($Action -eq 'Backup');offlineBackupCreated=$false} | ConvertTo-Json -Compress

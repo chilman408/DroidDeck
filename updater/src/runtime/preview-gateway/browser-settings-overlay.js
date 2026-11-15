@@ -107,7 +107,7 @@
   const refresh=home._refreshAudioButton;home._refreshAudioButton=function(){refresh.call(this);const playing=this.audioController.getAudioState()==='playing';this.audioButton.title=playing?'Mute':'Unmute';this.audioButton.setAttribute('aria-label',this.audioButton.title);this.audioButton.setAttribute('aria-pressed',String(playing));};
   const settings=D.getElementById('home-settings-button');if(settings){settings.innerHTML=mark;settings.title='Settings';settings.setAttribute('aria-label','Settings');settings.setAttribute('aria-expanded','false');}
  }
- if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',attach,{once:true});else attach();
+ if(D.readyState==='loading'||!T.ShellController||!T.HomeController)D.addEventListener('DOMContentLoaded',attach,{once:true});else attach();
  const style=node('style','');style.id='droidmate-settings-overlay-style';style.textContent=`
  #home-controls{background:rgba(20,29,40,.68)}.home-control-button{color:rgba(255,255,255,.82)}.home-control-button svg{width:30px;height:30px;flex-shrink:0}.home-control-button:focus-visible{outline:2px solid #8bf4b9;outline-offset:-4px}
  .dm-settings-overlay{position:fixed;z-index:60;top:56px;right:12px;display:flex;align-items:flex-start;gap:10px;max-height:calc(100dvh - 70px);color:#f3f6f9;font-family:system-ui,sans-serif}.dm-settings-overlay[hidden],.dm-menu-detail[hidden]{display:none!important}

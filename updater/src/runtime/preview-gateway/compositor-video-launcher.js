@@ -9,7 +9,7 @@ const { captureLayout } = require('./capture-layout');
 const { loadWorkerConfiguration } = require('../portable/worker-config');
 const { normalizeRuntimeConfig } = require('../portable/runtime-config');
 const { createVideoCaptureController } = require('./video-capture-controller');
-const { readVideoSettings } = require('./video-settings');
+const { readVersionedVideoSettings } = require('./video-settings');
 const { resolveCaptureSettings } = require('../portable/capture-policy');
 const { readPreference, preferenceFile, chooseEncoding, createStatusWriter } = require('./video-encoding');
 const { setTimeout: delay } = require('node:timers/promises');
@@ -168,7 +168,7 @@ async function main({ configuration, args = process.argv.slice(2) } = {}) {
   let preference = readPreference(preferenceFile(layout.videoSettingsFile), {uid:layout.uid});
   const writeStatus = createStatusWriter({gpuAvailable:encoder === 'vaapi'});
   let actualEncoding='starting', activeChild;
-  const report = () => writeStatus(actualEncoding, preference.revision);
+  const report = () => writeStatus(actualEncoding, preference.revision, preference.preference);
   report();
   const supervisedEncoder = encoder === 'vaapi';
   const resize = requestedResize(process.env);
@@ -188,7 +188,7 @@ async function main({ configuration, args = process.argv.slice(2) } = {}) {
     const size = { width: Number(match[1]), height: Number(match[2]), density: 180 };
     validateSize(size);
     const next = capturePlan((await adapter.guest(['/system/bin/dumpsys', 'input'])).toString(), size, await sourceNode(execute, fs, configuration));
-    const profile = readVideoSettings(layout.videoSettingsFile, { uid: layout.uid });
+    const profile = readVersionedVideoSettings(layout.videoSettingsFile, { uid: layout.uid });
     const nextPreference=readPreference(preferenceFile(layout.videoSettingsFile), {uid:layout.uid});
     if(nextPreference.revision!==preference.revision)actualEncoding='starting';
     preference=nextPreference; report();

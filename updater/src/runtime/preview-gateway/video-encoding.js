@@ -32,7 +32,7 @@ function chooseEncoding(protectedSettings,preference){
 function privateRootDirectory(directory){const stat=fs.lstatSync(directory);if(!stat.isDirectory()||stat.uid!==0||stat.mode&0o022)throw Error('Unsafe encoding status directory');}
 function processBirth(pid){const value=fs.readFileSync('/proc/'+pid+'/stat','utf8');return value.slice(value.lastIndexOf(')')+2).split(' ')[19];}
 function validateStatus(v){
- if(!v||Array.isArray(v)||Object.keys(v).sort().join(',')!=='birth,boot,effective,gpuAvailable,pid,preferenceRevision,updatedAt,version'||v.version!==1||!['cpu','gpu','starting','unavailable'].includes(v.effective)||typeof v.gpuAvailable!=='boolean'||!Number.isSafeInteger(v.pid)||v.pid<2||!Number.isSafeInteger(v.preferenceRevision)||v.preferenceRevision<0||!Number.isSafeInteger(v.updatedAt)||typeof v.birth!=='string'||!/^\d+$/.test(v.birth)||!/^[-a-f0-9]{36}$/.test(v.boot))throw Error('Invalid encoder status');
+ if(!v||Array.isArray(v)||Object.keys(v).sort().join(',')!=='birth,boot,effective,gpuAvailable,pid,preference,preferenceRevision,updatedAt,version'||v.version!==1||!['cpu','gpu','starting','unavailable'].includes(v.effective)||typeof v.gpuAvailable!=='boolean'||!['auto','cpu'].includes(v.preference)||!Number.isSafeInteger(v.pid)||v.pid<2||!Number.isSafeInteger(v.preferenceRevision)||v.preferenceRevision<0||!Number.isSafeInteger(v.updatedAt)||typeof v.birth!=='string'||!/^\d+$/.test(v.birth)||!/^[-a-f0-9]{36}$/.test(v.boot))throw Error('Invalid encoder status');
  return v;
 }
 function readStatus({now=Date.now}={}){
@@ -52,10 +52,10 @@ function createStatusWriter({gpuAvailable}){
  try{fs.mkdirSync(STATUS_DIRECTORY,{mode:0o755});}catch(error){if(error.code!=='EEXIST')throw error;}
  privateRootDirectory(STATUS_DIRECTORY);
  const identity=fs.lstatSync(STATUS_DIRECTORY),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),pid=process.pid,birth=processBirth(pid);
- return (effective,preferenceRevision)=>{
+ return (effective,preferenceRevision,preference='auto')=>{
   privateRootDirectory(STATUS_DIRECTORY);const current=fs.lstatSync(STATUS_DIRECTORY);if(current.dev!==identity.dev||current.ino!==identity.ino)throw Error('Encoder status directory changed');
   const existing=fs.lstatSync(STATUS_FILE,{throwIfNoEntry:false});if(existing&&(!existing.isFile()||existing.uid!==0||existing.nlink!==1||existing.mode&0o022||existing.size>2048))throw Error('Foreign encoder status preserved');
-  const value=validateStatus({version:1,boot,pid,birth,effective,gpuAvailable,preferenceRevision,updatedAt:Date.now()});
+  const value=validateStatus({version:1,boot,pid,birth,effective,gpuAvailable,preference,preferenceRevision,updatedAt:Date.now()});
   const temporary=STATUS_DIRECTORY+'/.status-'+crypto.randomBytes(16).toString('hex');let fd;
   try{fd=fs.openSync(temporary,'wx',0o644);fs.writeFileSync(fd,JSON.stringify(value)+'\n');fs.closeSync(fd);fd=undefined;fs.renameSync(temporary,STATUS_FILE);}finally{if(fd!==undefined)fs.closeSync(fd);if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
  };
