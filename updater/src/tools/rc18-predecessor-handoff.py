@@ -156,11 +156,33 @@ class SuccessorHandoff:
         graph=self.i.system_fields(b,b.SERVICE.name)
         if graph.get('FragmentPath')!=str(b.SERVICE) or graph.get('DropInPaths')!='':raise ValueError('Unmodified preference helper graph required')
         self.run(['/usr/bin/systemctl','stop',b.SERVICE.name])
+        self.prepare_retirement_recovery(old)
         # The planning API deliberately retains locks until its stack closes.
         for action in ('plan-retire','retire'):
             with ExitStack() as stack:
                 tree=object.__new__(b.Native);tree.stack,tree.held,tree.dirs,tree.records=stack,{},{},{};tree.p=old
                 self.i.transaction(b,tree,self.program_raw,old,self.history,action)
+        self.check()
+    def prepare_retirement_recovery(self,old):
+        # A previous terminal CPU recovery intentionally disabled this boot link.
+        # The immutable retirement API requires it enabled. Re-enable ONLY the
+        # exact idle signed owner, under the newly armed failure recovery guard.
+        self.guard_verify();self.verify_cpu(predecessor=True);b=self.program
+        unit='droiddeck-capture-recover@'+self.old_capture+'.service'
+        fields=self.i.system_fields(b,unit);self.i.quiet(fields)
+        expected={'LoadState':'loaded','ActiveState':'inactive','Result':'success',
+          'FragmentPath':str(b.RECOVERY_TEMPLATE),'DropInPaths':str(b.handoff_path(self.old_capture)),
+          'OnSuccess':b.SERVICE.name,'OnSuccessJobMode':'fail'}
+        if fields.get('UnitFileState') not in ('enabled','disabled') or any(fields.get(k,'')!=v for k,v in expected.items()):raise ValueError('Exact idle predecessor recovery required')
+        with ExitStack() as stack:
+            tree=self.b.Tree(stack)
+            if tree.file(b.RECOVERY_TEMPLATE,8192,0o644)!=b.recovery_unit() or tree.file(b.handoff_path(self.old_capture),4096,0o644)!=self.i.payload(b,self.program_raw,old)['handoff']:raise ValueError('Exact signed predecessor recovery bytes required')
+            tree.check()
+        if fields['UnitFileState']=='disabled':
+            link=Path('/etc/systemd/system/multi-user.target.wants')/unit
+            if os.path.lexists(link):raise ValueError('Foreign disabled recovery link preserved')
+            self.run(['/usr/bin/systemctl','enable',unit])
+        self.i.recovery_graph(b,old,True)
         self.check()
     def switch_recovery(self):
         self.guard_verify()
