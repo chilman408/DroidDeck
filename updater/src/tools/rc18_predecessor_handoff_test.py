@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Failure seams for the real handoff state machine; no VM/service operations."""
-import importlib.util,unittest,os,sys,tempfile
+import importlib.util,unittest,os,sys,tempfile,stat,hashlib
 from contextlib import ExitStack
 from unittest import mock
 from pathlib import Path,PurePosixPath
@@ -33,6 +33,13 @@ class Handoff(unittest.TestCase):
    for fragment in ('multi-user.target.wants','/run/systemd/system/', '.service.d'):
     with self.subTest(fragment=fragment),mock.patch.object(os.path,'lexists',side_effect=lambda p:fragment in str(p)):
      with self.assertRaises(ValueError):h.retire_previous_guard()
+ def test_present_pinned_guard_drains_and_disables_without_resetting_unloaded_successful_unit(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);directory=root/'etc/systemd/system';directory.mkdir(parents=True);raw=b'exact completed guard';aggregate='a'*64;unit='droidmate-successor-recovery-'+aggregate[:16]+'.service';(directory/unit).write_bytes(raw)
+   h=H.SuccessorHandoff.__new__(H.SuccessorHandoff);h.predecessor={'aggregate':aggregate,'handoffRecoverySha256':hashlib.sha256(raw).hexdigest()};calls=[]
+   h.b=SimpleNamespace(Tree=lambda stack:SimpleNamespace(file=lambda *args:raw));h.run=lambda args,**kw:calls.append((args,kw))
+   with mock.patch.object(H,'Path',lambda raw:root/str(raw).lstrip('/'),create=True),mock.patch.object(H,'os',os,create=True),mock.patch.object(H,'stat',stat,create=True),mock.patch.object(H,'sha',lambda raw:hashlib.sha256(raw).hexdigest(),create=True),mock.patch.object(H,'ExitStack',ExitStack,create=True):h.retire_previous_guard()
+   self.assertEqual(calls,[(['/usr/bin/systemctl','stop',unit],{'timeout':200}),(['/usr/bin/systemctl','disable',unit],{})])
  def test_success_commits_every_boundary_and_does_not_replay_accepted(self):
   j=Journal();b=Backend(j);self.assertEqual(H.handoff_transact(j,b,'upgrade-existing')['phase'],'accepted')
   self.assertEqual(j.events,list(H.HANDOFF_PHASES[1:]));self.assertEqual([n for n,_ in b.calls if n!='check'],list(H.HANDOFF_METHODS))

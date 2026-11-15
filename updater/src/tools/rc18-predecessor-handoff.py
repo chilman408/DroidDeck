@@ -186,7 +186,6 @@ class SuccessorHandoff:
             if not stat.S_ISLNK(info.st_mode) or (info.st_uid,info.st_gid)!=(0,0) or os.readlink(link)!=str(path):raise ValueError('Foreign previous guard link preserved')
         self.run(['/usr/bin/systemctl','stop',unit],timeout=200)
         self.run(['/usr/bin/systemctl','disable',unit])
-        self.run(['/usr/bin/systemctl','reset-failed',unit])
     def install_successor(self):self.guard_verify();self.new('install-existing')
     def check_successor(self):
         self.guard_verify()
