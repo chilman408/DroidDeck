@@ -17,6 +17,12 @@ HANDOFF_PREDECESSORS={
   'release':'rc18','entry':'8af86bf50d4fa3b9e1220360e20725d6b3ea830dcd859a23efba34d2d736f410',
   'handoffRecoverySha256':'ed1f732e60c34603ca396cd6cedf8519129e657102514c4c66eed0032fc3f756'},
 }
+# Same capture on .7 (direct install) and .215 (preserving handoff).
+HANDOFF_PREDECESSORS['14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2ec141b']={
+ 'aggregate':'d51ea91fb9e4f28e112f57a41129fcd0bbbd7c8500e45f5f04e79fc44831fd7f',
+ 'release':'rc18','entry':'892b437bb6a3047fc001fe2b2272124e27d8ea0e70ad97cec4d5db93fc438a92',
+ 'handoffRecoverySha256':'125fadcfa9d7d843b818c1fb0f794a2f6f44ac4c10eb055a1e7fde496c8b707b',
+ 'handoffRecoveryOptional':True}
 HANDOFF_PHASES=('new','intent','armed','cpu','stopped','mapped','loaded','started','verified','accepted')
 HANDOFF_METHODS=('admit','stage','restore_predecessor','retire_preference','switch_recovery','install_successor','check_successor','verify','finish')
 
@@ -90,6 +96,8 @@ class SuccessorHandoff:
         if old['packageSha256']!=self.old_capture:raise ValueError('Original predecessor GPU enrollment required')
         self.j.write('baseline.json',{'preference':old,'oldEntrySha256':self.predecessor['entry']})
         self.guard_install()
+        # Drain the exact predecessor verifier before retiring its namespace.
+        self.retire_previous_guard()
     def guard_bytes(self):
         return ('[Unit]\nDescription=DroidMate preserving successor recovery\nStartLimitIntervalSec=0\nAfter=network.target '+RUNTIME+' '+self.old_recovery+' '+self.new_recovery+'\n'
           '[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nWorkingDirectory=/\nPrivateMounts=no\n'
@@ -159,21 +167,26 @@ class SuccessorHandoff:
         # No simultaneous enabled old/new capture recovery owners after retirement.
         self.run(['/usr/bin/systemctl','disable',self.old_recovery])
         self.run(['/usr/bin/systemctl','enable',self.new_recovery])
-        previous_guard=self.predecessor.get('handoffRecoverySha256')
-        if previous_guard:
-            unit='droidmate-successor-recovery-'+self.predecessor['aggregate'][:16]+'.service'
-            path=Path('/etc/systemd/system')/unit
-            if any(os.path.lexists(Path(base)/(unit+'.d')) for base in ('/etc/systemd/system','/run/systemd/system')):raise ValueError('Foreign previous guard overrides preserved')
-            with ExitStack() as stack:
-                raw=self.b.Tree(stack).file(path,8192,0o644)
-            if sha(raw)!=previous_guard:raise ValueError('Original completed predecessor guard required')
-            link=path.parent/'multi-user.target.wants'/unit
-            if os.path.lexists(link):
-                info=link.lstat()
-                if not stat.S_ISLNK(info.st_mode) or (info.st_uid,info.st_gid)!=(0,0) or os.readlink(link)!=str(path):raise ValueError('Foreign previous guard link preserved')
-            self.run(['/usr/bin/systemctl','disable',unit])
-            self.run(['/usr/bin/systemctl','reset-failed',unit])
         self.run(['/usr/bin/systemctl','daemon-reload'])
+    def retire_previous_guard(self):
+        previous_guard=self.predecessor.get('handoffRecoverySha256')
+        if not previous_guard:return
+        unit='droidmate-successor-recovery-'+self.predecessor['aggregate'][:16]+'.service'
+        path=Path('/etc/systemd/system')/unit
+        link=path.parent/'multi-user.target.wants'/unit
+        if any(os.path.lexists(Path(base)/(unit+'.d')) for base in ('/etc/systemd/system','/run/systemd/system')) or os.path.lexists(Path('/run/systemd/system')/unit):raise ValueError('Foreign previous guard overrides preserved')
+        if not os.path.lexists(path):
+            if self.predecessor.get('handoffRecoveryOptional') and not os.path.lexists(link):return
+            raise ValueError('Original completed predecessor guard required')
+        with ExitStack() as stack:
+            raw=self.b.Tree(stack).file(path,8192,0o644)
+        if sha(raw)!=previous_guard:raise ValueError('Original completed predecessor guard required')
+        if os.path.lexists(link):
+            info=link.lstat()
+            if not stat.S_ISLNK(info.st_mode) or (info.st_uid,info.st_gid)!=(0,0) or os.readlink(link)!=str(path):raise ValueError('Foreign previous guard link preserved')
+        self.run(['/usr/bin/systemctl','stop',unit],timeout=200)
+        self.run(['/usr/bin/systemctl','disable',unit])
+        self.run(['/usr/bin/systemctl','reset-failed',unit])
     def install_successor(self):self.guard_verify();self.new('install-existing')
     def check_successor(self):
         self.guard_verify()

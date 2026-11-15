@@ -3,7 +3,7 @@
 import importlib.util,unittest,os,sys,tempfile
 from contextlib import ExitStack
 from unittest import mock
-from pathlib import Path
+from pathlib import Path,PurePosixPath
 from types import SimpleNamespace
 spec=importlib.util.spec_from_file_location('handoff',Path(__file__).with_name('rc18-predecessor-handoff.py'));H=importlib.util.module_from_spec(spec);spec.loader.exec_module(H)
 class Journal:
@@ -26,6 +26,13 @@ class Handoff(unittest.TestCase):
   for value in H.HANDOFF_PREDECESSORS.values():
    if 'handoffRecoverySha256' in value:self.assertRegex(value['handoffRecoverySha256'],r'^[a-f0-9]{64}$')
   self.assertEqual(H.HANDOFF_PREDECESSORS['baf49445cc9e331d6ee9a3ba71eb48ad3e9723301ff60874f99723e3f73d0526']['handoffRecoverySha256'],'ed1f732e60c34603ca396cd6cedf8519129e657102514c4c66eed0032fc3f756')
+ def test_current_direct_install_allows_absent_guard_but_preserves_foreign_links_and_overrides(self):
+  h=H.SuccessorHandoff.__new__(H.SuccessorHandoff);h.predecessor=H.HANDOFF_PREDECESSORS['14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2ec141b'];h.run=lambda args:self.fail('Absent optional guard must not call systemctl')
+  with mock.patch.object(H,'Path',PurePosixPath,create=True),mock.patch.object(H,'os',os,create=True):
+   with mock.patch.object(os.path,'lexists',return_value=False):h.retire_previous_guard()
+   for fragment in ('multi-user.target.wants','/run/systemd/system/', '.service.d'):
+    with self.subTest(fragment=fragment),mock.patch.object(os.path,'lexists',side_effect=lambda p:fragment in str(p)):
+     with self.assertRaises(ValueError):h.retire_previous_guard()
  def test_success_commits_every_boundary_and_does_not_replay_accepted(self):
   j=Journal();b=Backend(j);self.assertEqual(H.handoff_transact(j,b,'upgrade-existing')['phase'],'accepted')
   self.assertEqual(j.events,list(H.HANDOFF_PHASES[1:]));self.assertEqual([n for n,_ in b.calls if n!='check'],list(H.HANDOFF_METHODS))

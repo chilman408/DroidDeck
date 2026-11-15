@@ -72,8 +72,6 @@
     }
     const dynamic=findTitle('dynamic aspect ratio');
     if(!dynamic)return;
-    const resolutionRow=[...this.content.querySelectorAll('.settings-tile')].find(tile=>tile.querySelector('.settings-tile-title')?.textContent==='Resolution');
-    if(resolutionRow){const detail=global.document.createElement('p');detail.className='settings-description';detail.textContent='Current display: '+state.width+' × '+state.height+'. Resolution targets are constrained by the display and navigation layout.';this.content.insertBefore(detail,resolutionRow.nextSibling);}
 
     const ratios=[['4:3',4,3],['16:9',16,9],['1:1',1,1],['9:16',9,16],['3:4',3,4]];
     const ratio=state.width/state.height,chosen=ratios.find(([,w,h])=>Math.abs(w/h-ratio)<.01)?.[0] || 'current';

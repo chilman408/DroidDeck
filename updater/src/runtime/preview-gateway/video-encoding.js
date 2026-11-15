@@ -51,13 +51,31 @@ function createStatusWriter({gpuAvailable}){
  privateRootDirectory('/');privateRootDirectory('/run');
  try{fs.mkdirSync(STATUS_DIRECTORY,{mode:0o755});}catch(error){if(error.code!=='EEXIST')throw error;}
  privateRootDirectory(STATUS_DIRECTORY);
+ // This namespace exposes only closed, non-sensitive telemetry. A restrictive
+ // service umask must not hide it from the unprivileged gateway. Never widen a
+ // directory containing unknown files or a substituted status object.
+ const pending=STATUS_DIRECTORY+'/.pending';
+ try{fs.mkdirSync(pending,{mode:0o700});}catch(error){if(error.code!=='EEXIST')throw error;}
+ privateRootDirectory(pending);if((fs.lstatSync(pending).mode&0o777)!==0o700)throw Error('Private pending telemetry directory required');
+ const directory=fs.openSync(STATUS_DIRECTORY,fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);
+ try{
+  const identity=fs.fstatSync(directory),current=fs.lstatSync(STATUS_DIRECTORY);
+  if(identity.dev!==current.dev||identity.ino!==current.ino)throw Error('Encoder status directory changed');
+  for(const name of fs.readdirSync(STATUS_DIRECTORY)){
+   if(name==='.pending')continue;
+   if(name!=='status.json')throw Error('Foreign encoder status preserved');
+   const fd=fs.openSync(STATUS_FILE,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW|fs.constants.O_NONBLOCK);
+   try{const info=fs.fstatSync(fd);if(!info.isFile()||info.uid!==0||info.nlink!==1||info.mode&0o022||info.size>2048)throw Error('Foreign encoder status preserved');validateStatus(JSON.parse(fs.readFileSync(fd,'utf8')));}finally{fs.closeSync(fd);}
+  }
+  fs.fchmodSync(directory,0o755);
+ }finally{fs.closeSync(directory);}
  const identity=fs.lstatSync(STATUS_DIRECTORY),boot=fs.readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),pid=process.pid,birth=processBirth(pid);
  return (effective,preferenceRevision,preference='auto')=>{
   privateRootDirectory(STATUS_DIRECTORY);const current=fs.lstatSync(STATUS_DIRECTORY);if(current.dev!==identity.dev||current.ino!==identity.ino)throw Error('Encoder status directory changed');
   const existing=fs.lstatSync(STATUS_FILE,{throwIfNoEntry:false});if(existing&&(!existing.isFile()||existing.uid!==0||existing.nlink!==1||existing.mode&0o022||existing.size>2048))throw Error('Foreign encoder status preserved');
   const value=validateStatus({version:1,boot,pid,birth,effective,gpuAvailable,preference,preferenceRevision,updatedAt:Date.now()});
-  const temporary=STATUS_DIRECTORY+'/.status-'+crypto.randomBytes(16).toString('hex');let fd;
-  try{fd=fs.openSync(temporary,'wx',0o644);fs.writeFileSync(fd,JSON.stringify(value)+'\n');fs.closeSync(fd);fd=undefined;fs.renameSync(temporary,STATUS_FILE);}finally{if(fd!==undefined)fs.closeSync(fd);if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
+  const temporary=pending+'/.status-'+crypto.randomBytes(16).toString('hex');let fd;
+  try{fd=fs.openSync(temporary,'wx',0o644);fs.fchmodSync(fd,0o644);fs.writeFileSync(fd,JSON.stringify(value)+'\n');fs.closeSync(fd);fd=undefined;fs.renameSync(temporary,STATUS_FILE);}finally{if(fd!==undefined)fs.closeSync(fd);if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
  };
 }
 function createEncodingControl(file,{status=readStatus}={}){

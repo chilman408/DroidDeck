@@ -10,7 +10,7 @@
  function styles(){return `
  /* Startup presentation does not depend on fonts or JavaScript execution. */
  html:not(.dm-startup-ready) #touch-layer{pointer-events:none!important}
- #home-controls .home-control-icon{font-size:0!important;line-height:0;width:30px;height:30px;display:block;opacity:.82}
+ #home-controls .home-control-icon{font-size:0!important;line-height:0;width:30px;height:30px;display:block;opacity:.72}
  #home-controls .home-control-icon::before{content:"";display:block;width:30px;height:30px;background:center/contain no-repeat}
  #home-settings-button .home-control-icon::before{background-image:${uri(mark)}}
  #home-audio-button .home-control-icon::before{background-image:${uri(speaker)}}
