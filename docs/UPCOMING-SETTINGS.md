@@ -8,9 +8,12 @@ emergency automatic targets, while 6/10 Mbps are available in the manual menu.
 
 This is development source. The RC17 download, installer, tag and checksums are
 unchanged. These source changes are not yet an installable update and do not
-update an existing VM by themselves. Private successor qualification is in progress. One portable handoff and a
-saved CPU-only reboot have passed; the startup-order correction, repeatable
-recovery and the final all-VM rollout are still being verified. Follow the existing RC17 installation guide for the published build.
+update an existing VM by themselves. The signed private candidate has now been
+installed and checked on three qualification VMs, including the original legacy
+layout. Both actual video renderers and all eight Settings follow-up checks pass;
+the disposable VM also recovered GPU encoding after reboot. Runtime source hashes
+match across all three. Follow the existing RC17 installation guide for the
+published build.
 
 The generated-API browser test exercises the real shipped frontend controllers at
 1280x720, 480x480, 640x480 and 390x844. Focused backend tests cover ownership,
@@ -34,4 +37,4 @@ at the bottom. Connection/device values use consistent typography and wrap long
 addresses. About/donation copy sits beside the illustrations. Corner icon ink is
 slightly more transparent. Closed, non-sensitive encoding telemetry remains
 readable under a restrictive service umask; unfinished writes stay private.
-The new candidate remains unpublished while private rollout is verified.
+The qualified private candidate remains unpublished; the public RC17 installer is unchanged.
