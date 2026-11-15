@@ -18,7 +18,7 @@ test('real Settings overlay keeps player alive and preserves controls, authority
   window.DroidDeckAudio={snapshot:()=>({...audioState}),setAutomatic:v=>audioState.automaticQuality=v,select:v=>{audioState.requested=v;}};
   window.getAudioDelayMs=()=>0;window.setAudioDelayMs=v=>calls.push({delay:v});
  });
- for(const name of ['browser-settings-policy','browser-update-policy','browser-adaptive-policy','browser-audio-policy','browser-settings-overlay'])await page.addScriptTag({path:path.resolve('runtime/preview-gateway',name+'.js')});
+ for(const name of ['browser-settings-policy','browser-update-policy','browser-adaptive-policy','browser-audio-policy','browser-settings-overlay'])await page.addScriptTag({path:path.resolve(__dirname,'../runtime/preview-gateway',name+'.js')});
  await page.evaluate(async()=>{
   window.api={displaySession:{token:'generated-session',csrfToken:'generated-csrf'},browserAudioSupported:true,browserGpsManaged:true,browserGpsSupported:true,
    fetchDisplayState:async()=>state,fetchSystemConfiguration:async()=>({'persist.tesla-android.browser_audio.is_enabled':1,'persist.tesla-android.browser_audio.volume':150,'persist.tesla-android.gps.is_active':1}),
