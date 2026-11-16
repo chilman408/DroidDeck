@@ -45,8 +45,8 @@ and dark background independently 49% transparent. Controls fade after eleven
 seconds without interaction and return on input. Startup, open Settings and
 keyboard focus keep them available. Reveal touches preserve the original Android
 gesture and do not accidentally unmute; reduced motion is respected. This follow-up
-has passed live WebCodecs and Legacy checks on the disposable VM, including
-actual touch reveal without unmuting. The Settings button also closes the full
-menu on a second tap, whether the root or a submenu is open. The preserving
-rollout to the other two VMs is in progress; this does not replace the published
-installer.
+has passed live WebCodecs and Legacy checks on all three qualification VMs.
+Actual touch reveal without unmuting was verified on the disposable VM. The
+Settings button closes the full menu on a second tap, whether the root or a
+submenu is open. The preserving rollout is complete; this does not replace
+the published installer.
