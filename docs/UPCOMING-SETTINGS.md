@@ -40,9 +40,13 @@ readable under a restrictive service umask; unfinished writes stay private.
 The qualified private candidate remains unpublished; the public RC17 installer is unchanged.
 
 
-The next private candidate uses 28px corner icons in 39px buttons, with white ink
+The private compact-controls candidate uses 28px corner icons in 39px buttons, with white ink
 and dark background independently 49% transparent. Controls fade after eleven
 seconds without interaction and return on input. Startup, open Settings and
 keyboard focus keep them available. Reveal touches preserve the original Android
 gesture and do not accidentally unmute; reduced motion is respected. This follow-up
-is in private qualification and does not replace the published installer.
+has passed live WebCodecs and Legacy checks on the disposable VM, including
+actual touch reveal without unmuting. The Settings button also closes the full
+menu on a second tap, whether the root or a submenu is open. The preserving
+rollout to the other two VMs is in progress; this does not replace the published
+installer.
