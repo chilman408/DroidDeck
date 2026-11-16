@@ -29,8 +29,9 @@ test('real Settings overlay keeps player alive and preserves controls, authority
  });
  assert.deepEqual(await page.locator('.settings-menu-label').allTextContents(),['Display','Audio','Connectivity','Device Info','Updates']);
  assert.equal(await page.locator('#home-shell').isVisible(),true);assert.deepEqual(await page.evaluate(()=>pauseCalls),[]);
- // Exercise the actual Settings launcher handler against the real Shell wrapper.
- await page.evaluate(()=>document.getElementById('home-settings-button').addEventListener('click',()=>shell.setPage('settings')));
+ // Match the verified production app callback, then wire the real Home handler.
+ assert.match(fs.readFileSync(path.join(frontend,'js/core/app.js'),'utf8'),/onSettingsRequested:\s*\(\)\s*=>\s*\{\s*if\s*\(shellController\)\s*\{\s*shellController\.setPage\("about"\)/);
+ await page.evaluate(()=>{window.home=new TAHtml.HomeController({apiClient:api,audioController:{toggle(){},getAudioState:()=> 'stopped'},audioButton:document.getElementById('home-audio-button'),updateButton:document.getElementById('home-update-button'),settingsButton:document.getElementById('home-settings-button'),onSettingsRequested:()=>shell.setPage('about')});home._wireEvents();});
  await page.locator('#home-settings-button').click();await page.waitForTimeout(220);
  assert.equal(await page.locator('.dm-settings-overlay').isVisible(),false,'second Settings tap closes root menu');
  assert.equal(await page.locator('#home-settings-button').getAttribute('aria-expanded'),'false');
