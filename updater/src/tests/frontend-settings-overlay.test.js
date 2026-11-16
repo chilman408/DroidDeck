@@ -29,6 +29,20 @@ test('real Settings overlay keeps player alive and preserves controls, authority
  });
  assert.deepEqual(await page.locator('.settings-menu-label').allTextContents(),['Display','Audio','Connectivity','Device Info','Updates']);
  assert.equal(await page.locator('#home-shell').isVisible(),true);assert.deepEqual(await page.evaluate(()=>pauseCalls),[]);
+ // Exercise the actual Settings launcher handler against the real Shell wrapper.
+ await page.evaluate(()=>document.getElementById('home-settings-button').addEventListener('click',()=>shell.setPage('settings')));
+ await page.locator('#home-settings-button').click();await page.waitForTimeout(220);
+ assert.equal(await page.locator('.dm-settings-overlay').isVisible(),false,'second Settings tap closes root menu');
+ assert.equal(await page.locator('#home-settings-button').getAttribute('aria-expanded'),'false');
+ await page.locator('#home-settings-button').click();await page.evaluate(()=>settings.setActiveSection('display'));
+ await page.locator('#home-settings-button').click();await page.waitForTimeout(220);
+ assert.equal(await page.locator('.dm-settings-overlay').isVisible(),false,'second Settings tap closes a submenu too');
+ assert.equal(await page.locator('.dm-menu-detail').isVisible(),false);
+ await page.locator('#home-settings-button').click();
+ assert.equal(await page.locator('.dm-settings-overlay').isVisible(),true);assert.equal(await page.locator('.dm-menu-detail').isVisible(),false,'reopen starts at root');
+ await page.evaluate(()=>{shell.setPage('settings');shell.setPage('settings');});await page.waitForTimeout(240);
+ assert.equal(await page.locator('.dm-settings-overlay').isVisible(),true,'tap during close animation reopens cleanly');
+
  for(const viewport of [{width:1280,height:720},{width:480,height:480},{width:640,height:480},{width:390,height:844}]){
   await page.setViewportSize(viewport);
   for(const id of ['display','audio','connectivity','deviceInfo','updates']){
@@ -134,6 +148,6 @@ test('deferred production script order attaches player hooks after Home and Shel
  const scripts=['js/core/shared.js','js/display/display-renderer-manager.js','js/settings/settings-controller.js','OVERLAY','js/home/home-controller.js','js/shell/shell-controller.js'];
  await page.route('http://deferred.test/**',route=>{const name=new URL(route.request().url()).pathname.slice(1);if(name==='')return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head>'+scripts.map((n,i)=>'<script defer src="/'+i+'.js"></script>').join('')+'</head><body><button id="home-settings-button"><span>settings</span></button></body></html>'});const i=Number(name.split('.')[0]);const body=scripts[i]==='OVERLAY'?fs.readFileSync(path.resolve(__dirname,'../runtime/preview-gateway/browser-settings-overlay.js')):fs.readFileSync(path.join(frontend,scripts[i]));return route.fulfill({contentType:'text/javascript',body});});
  await page.goto('http://deferred.test/',{waitUntil:'load'});
- assert.equal(await page.evaluate(()=>TAHtml.ShellController.prototype.setPage.toString().includes('_dmOverlay.open()')),true);
+ assert.equal(await page.evaluate(()=>TAHtml.ShellController.prototype.setPage.toString().includes('overlay.close();return;')),true);
  assert.equal(await page.locator('#home-settings-button svg').count(),1);assert.deepEqual(errors,[]);
 });

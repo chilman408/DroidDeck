@@ -23,6 +23,10 @@ HANDOFF_PREDECESSORS['14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2
  'release':'rc18','entry':'892b437bb6a3047fc001fe2b2272124e27d8ea0e70ad97cec4d5db93fc438a92',
  'handoffRecoverySha256':'125fadcfa9d7d843b818c1fb0f794a2f6f44ac4c10eb055a1e7fde496c8b707b',
  'handoffRecoveryOptional':True}
+HANDOFF_PREDECESSORS['b4cab518de53b8c7fb7e204ee9e47285ba72e05cc0fe5570ed174e87ae92b851']={
+ 'aggregate':'e111da74492c561a87c4135df9fa3439d687ac0325c4e92683e835d3f4e84446','release':'rc18',
+ 'entry':'7ae29ac218ee06a3d8936f0680a86dfecdca0e95341d9ca0b7fa5dfef8e6b464',
+ 'handoffRecoverySha256':'125ac4dd89192448853b01e07a3a71ac02a8d02e285857293b38bdd521a37714'}
 # Two accepted aggregate layouts share one signed runtime. The immutable
 # installation origin selects ONLY among these publisher-pinned candidates.
 HANDOFF_SHARED_PREDECESSORS={
