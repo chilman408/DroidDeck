@@ -10,8 +10,9 @@
  function styles(){return `
  /* Startup presentation does not depend on fonts or JavaScript execution. */
  html:not(.dm-startup-ready) #touch-layer{pointer-events:none!important}
- #home-controls .home-control-icon{font-size:0!important;line-height:0;width:30px;height:30px;display:block;opacity:.72}
- #home-controls .home-control-icon::before{content:"";display:block;width:30px;height:30px;background:center/contain no-repeat}
+ #home-controls{background:rgba(20,29,40,.51)}#home-controls .home-control-button{width:39px;height:39px;padding:0}
+ #home-controls .home-control-icon{font-size:0!important;line-height:0;width:28px;height:28px;display:block;opacity:.51}
+ #home-controls .home-control-icon::before{content:"";display:block;width:28px;height:28px;background:center/contain no-repeat}
  #home-settings-button .home-control-icon::before{background-image:${uri(mark)}}
  #home-audio-button .home-control-icon::before{background-image:${uri(speaker)}}
  #home-update-button .home-control-icon::before{background-image:${uri(download)}}

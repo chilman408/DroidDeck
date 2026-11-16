@@ -38,3 +38,11 @@ addresses. About/donation copy sits beside the illustrations. Corner icon ink is
 slightly more transparent. Closed, non-sensitive encoding telemetry remains
 readable under a restrictive service umask; unfinished writes stay private.
 The qualified private candidate remains unpublished; the public RC17 installer is unchanged.
+
+
+The next private candidate uses 28px corner icons in 39px buttons, with white ink
+and dark background independently 49% transparent. Controls fade after eleven
+seconds without interaction and return on input. Startup, open Settings and
+keyboard focus keep them available. Reveal touches preserve the original Android
+gesture and do not accidentally unmute; reduced motion is respected. This follow-up
+is in private qualification and does not replace the published installer.
