@@ -78,6 +78,15 @@ class Handoff(unittest.TestCase):
        self.assertNotIn('stage',calls)
       else:
        h.stage_controls(names);self.assertEqual(calls.count('stage'),0 if exists else 1);self.assertIn('checked',calls)
+ def test_shared_runtime_selects_only_exact_pinned_installation_origin_and_saved_entry(self):
+  capture='2c7d495a3ed6ed096ec1285a08389c04be8c9070f83a3dfb9b8a5c889aacb394'
+  for value in H.HANDOFF_SHARED_PREDECESSORS[capture]:
+   self.assertEqual(H.select_predecessor(capture,history='droidmate-gpu-install-rc18-'+value['aggregate'][:16]),value)
+   self.assertEqual(H.select_predecessor(capture,entry=value['entry']),value)
+   for key in ('aggregate','entry','handoffRecoverySha256'):self.assertRegex(value[key],r'^[a-f0-9]{64}$')
+  for kw in ({},{'history':'foreign'},{'entry':'0'*64}):
+   with self.assertRaises(ValueError):H.select_predecessor(capture,**kw)
+  with self.assertRaises(ValueError):H.select_predecessor('0'*64,history='droidmate-gpu-install-rc17-c80a06892581d6f0')
  def test_success_commits_every_boundary_and_does_not_replay_accepted(self):
   j=Journal();b=Backend(j);self.assertEqual(H.handoff_transact(j,b,'upgrade-existing')['phase'],'accepted')
   self.assertEqual(j.events,list(H.HANDOFF_PHASES[1:]));self.assertEqual([n for n,_ in b.calls if n!='check'],list(H.HANDOFF_METHODS))

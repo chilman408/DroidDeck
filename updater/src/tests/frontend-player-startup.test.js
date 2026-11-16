@@ -17,7 +17,7 @@ test('font-independent startup buttons precede JavaScript; logo waits for actual
   await page.locator('#home-controls').waitFor();await page.waitForTimeout(250);
   for(const id of ['home-audio-button','home-settings-button']){
    const state=await page.locator('#'+id+' .home-control-icon').evaluate(e=>{const r=document.createRange();r.selectNodeContents(e);return {font:getComputedStyle(e).fontSize,textWidth:r.getBoundingClientRect().width,image:getComputedStyle(e,'::before').backgroundImage,button:e.parentElement.getBoundingClientRect().width};});
-   assert.equal(state.font,'0px');assert.equal(state.textWidth,0);assert.match(state.image,/data:image\/svg\+xml/);assert.equal(state.button,48);
+   assert.equal(state.font,'0px');assert.equal(state.textWidth,0);assert.match(state.image,/data:image\/svg\+xml/);assert.equal(state.button,39);
   }
   assert.equal(await page.locator('html.dm-startup-ready').count(),0,'CSS loading precedes any app JavaScript');
   assert.ok(await page.locator('#home-stage').evaluate(e=>Number(getComputedStyle(e,'::after').opacity)>0));

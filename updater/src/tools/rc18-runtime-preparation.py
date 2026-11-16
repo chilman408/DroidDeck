@@ -119,7 +119,7 @@ def prepare(predecessor,component,activation,activation_statement,activation_sig
                     with view.hold_view(token) as original:
                         if original['report']['mode']!='gpu' or original['report']['componentSha256']!=COMPONENT:raise ValueError('Original complete GPU view required')
                         original['check']()
-                elif value['packageSha256'] in ('a5509f99f4f4e4a26d5ced56ee872fc7bed6f3bdc2af8826cdd181393c7d26da','baf49445cc9e331d6ee9a3ba71eb48ad3e9723301ff60874f99723e3f73d0526','14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2ec141b'):
+                elif value['packageSha256'] in ('a5509f99f4f4e4a26d5ced56ee872fc7bed6f3bdc2af8826cdd181393c7d26da','baf49445cc9e331d6ee9a3ba71eb48ad3e9723301ff60874f99723e3f73d0526','14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2ec141b','2c7d495a3ed6ed096ec1285a08389c04be8c9070f83a3dfb9b8a5c889aacb394'):
                     # Keep the predecessor's completed record byte-exact. The
                     # signed controller archives it when starting a FRESH operation.
                     token=secrets.token_hex(16);view.prepare(COMPONENT,token,'gpu')
@@ -134,7 +134,8 @@ def prepare(predecessor,component,activation,activation_statement,activation_sig
    bridge=b"""    def predecessor_restored(self,op):
         predecessors={'a5509f99f4f4e4a26d5ced56ee872fc7bed6f3bdc2af8826cdd181393c7d26da':'0747a1d63f455cfcf003f326d7f9ed3c5e6de63dfee5ae4498799384d033bc92',
           'baf49445cc9e331d6ee9a3ba71eb48ad3e9723301ff60874f99723e3f73d0526':'cffefc08f288c94cb612c70df9220991002f335dfe4c8d0b09dbb5e824048034',
-          '14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2ec141b':'91c390865c09f09b5c830286d996e1f7e8640f2e24f020bbe1b8207c9d911718'}
+          '14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2ec141b':'91c390865c09f09b5c830286d996e1f7e8640f2e24f020bbe1b8207c9d911718',
+          '2c7d495a3ed6ed096ec1285a08389c04be8c9070f83a3dfb9b8a5c889aacb394':'16c0a4982e1ddb23af0f2d95136cb555ab195c1031ab9a85afd861e51862f07c'}
         if op['packageSha256'] not in predecessors or op['phase']!='restored':return False
         raw=self.b.encode(op);cached=getattr(self,'_predecessor_terminal',None)
         if cached is not None:

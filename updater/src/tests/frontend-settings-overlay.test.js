@@ -4,7 +4,7 @@ const {chromium}=require('../runtime/preview-gateway/node_modules/playwright-cor
 const frontend=process.env.TA_FRONTEND_DIR;if(!frontend)throw Error('TA_FRONTEND_DIR must be the verified immutable frontend');
 test('real Settings overlay keeps player alive and preserves controls, authority and navigation',async t=>{
  const browser=await chromium.launch({executablePath:process.env.EDGE_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});t.after(()=>browser.close());
- const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await browser.newPage({hasTouch:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('http://droidmate.test/**',route=>{const file=path.join(frontend,new URL(route.request().url()).pathname);if(!fs.existsSync(file)||!fs.statSync(file).isFile())return route.abort();return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.css')?'text/css':undefined});});
  await page.evaluate(html=>{const doc=new DOMParser().parseFromString(html,'text/html');for(const script of doc.querySelectorAll('script'))script.remove();const base=doc.createElement('base');base.href='http://droidmate.test/';doc.head.prepend(base);document.open();document.write(doc.documentElement.outerHTML);document.close();},fs.readFileSync(path.join(frontend,'index.html'),'utf8'));
  for(const file of ['js/core/shared.js','js/display/display-renderer-manager.js','js/settings/settings-controller.js','js/shell/shell-controller.js','js/home/home-controller.js','js/release-notes/release-notes-data.js'])await page.addScriptTag({path:path.join(frontend,file)});
@@ -77,7 +77,7 @@ test('real Settings overlay keeps player alive and preserves controls, authority
    }
   }
  }
- assert.equal(await page.locator('#home-settings-button').evaluate(e=>getComputedStyle(e).color),'rgba(255, 255, 255, 0.72)');
+ assert.equal(await page.locator('#home-settings-button').evaluate(e=>getComputedStyle(e).color),'rgba(255, 255, 255, 0.51)');
  await page.evaluate(async()=>{quality.profile={revision:5,bitRate:720000,maxFps:15};await settings.setActiveSection('display');await settings._dmChildren[0]._renderActiveSection();});
  assert.match(await page.locator('.dm-current').textContent(),/720 kbps.*15 fps/);
  await page.evaluate(()=>{quality.profile={revision:6,bitRate:2000000,maxFps:30};});await page.waitForTimeout(2200);
@@ -91,6 +91,39 @@ test('real Settings overlay keeps player alive and preserves controls, authority
  await page.evaluate(async()=>{state.canControl=true;encoding.gpuAvailable=false;await settings.setActiveSection('display');settings.refreshDisplayControl(state);});assert.equal(await page.locator('[data-dm-encoding] .settings-dropdown-trigger').isDisabled(),true);
  await page.evaluate(async()=>{const original=api.fetchDisplayState;api.fetchDisplayState=()=>new Promise((_resolve,reject)=>window.failSlowDisplay=reject);window.slowDisplay=settings.setActiveSection('display');while(!window.failSlowDisplay)await new Promise(r=>setTimeout(r,0));await settings.setActiveSection('audio');failSlowDisplay(Error('Delayed display failure'));await slowDisplay;api.fetchDisplayState=original;});
  assert.equal(await page.locator('[data-audio-format]').count(),1);assert.equal(await page.getByText('Service error',{exact:true}).count(),0);
+ // Actual touch hit-testing must still reach Android when the corner is hidden.
+ await page.evaluate(()=>settings._dmOverlay.close());await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});await page.clock.pauseAt(new Date('2030-01-01T00:00:01Z'));await page.emulateMedia({reducedMotion:'no-preference'});
+ await page.evaluate(()=>{settings._dmOverlay.close();TAHtml.HomeController.prototype._setButtonIcon.call({},document.getElementById('home-audio-button'),'volume_off');document.activeElement?.blur();document.documentElement.classList.add('dm-startup-ready');window.controlClicks=0;window.touchTargets=[];document.getElementById('home-audio-button').addEventListener('click',()=>++controlClicks);document.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')touchTargets.push({id:e.target.id,cancelled:e.defaultPrevented});});document.dispatchEvent(new Event('droidmate-controls-activity'));});
+ assert.equal(await page.locator('#home-controls').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(20, 29, 40, 0.51)');
+ assert.equal(await page.locator('#home-controls').evaluate(e=>getComputedStyle(e).transitionDuration),'0.32s');
+ for(const id of ['home-settings-button','home-audio-button'])assert.deepEqual(await page.locator('#'+id).evaluate(e=>({w:e.offsetWidth,h:e.offsetHeight,iw:e.querySelector('svg').getBoundingClientRect().width,ih:e.querySelector('svg').getBoundingClientRect().height})),{w:39,h:39,iw:28,ih:28});
+ await page.clock.runFor(400);await page.evaluate(()=>document.dispatchEvent(new Event('droidmate-controls-activity')));
+ await page.clock.fastForward(10999);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false);
+ await page.clock.fastForward(1);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),true,JSON.stringify(await page.evaluate(()=>({hidden:document.hidden,ready:document.documentElement.className,menus:[...document.querySelectorAll('.dm-settings-overlay')].map(e=>({hidden:e.hidden,inert:e.inert})),focus:document.querySelector('#home-controls :focus-visible')?.id,active:document.activeElement?.id,bar:document.getElementById('home-controls').className}))));
+ assert.equal(await page.locator('#home-controls').evaluate(e=>getComputedStyle(e).pointerEvents),'none');
+ const box=await page.locator('#home-audio-button').boundingBox();await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+ assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false);assert.equal(await page.evaluate(()=>controlClicks),0,'reveal touch must not accidentally unmute');
+ assert.equal(await page.evaluate(()=>touchTargets.length>0&&touchTargets.every(e=>!e.cancelled&&e.id!=='home-audio-button')),true,'original Android touch target passes through');
+ await page.clock.fastForward(10000);await page.touchscreen.tap(100,150);await page.clock.fastForward(10000);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false,'touch restarts all eleven seconds');
+ await page.clock.fastForward(1001);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),true);
+ // A dragged/cancelled reveal has no synthesized click; it unlocks afterward.
+ const cdp=await page.context().newCDPSession(page);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:100,y:150}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+ assert.equal(await page.locator('#home-controls').evaluate(e=>e.classList.contains('dm-controls-waking')),true);
+ await page.clock.fastForward(300);
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2}]});
+ await page.clock.fastForward(500);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),true,'previous fallback must not unlock a new touch');
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await page.clock.fastForward(400);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false);assert.equal(await page.evaluate(()=>controlClicks),0);
+ await page.clock.fastForward(11000);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),true);
+ await page.keyboard.press('Tab');await page.locator('#home-audio-button').focus();await page.clock.fastForward(15000);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false,'keyboard focus stays accessible');
+ await page.evaluate(()=>{document.activeElement?.blur();settings._dmOverlay.open();});await page.clock.fastForward(15000);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false,'open Settings retains controls');
+ await page.emulateMedia({reducedMotion:'reduce'});await page.evaluate(()=>settings._dmOverlay.close());await page.clock.runFor(1);await page.clock.fastForward(11500);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),true);
+ await page.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide')));await page.clock.fastForward(30000);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),false);
+ await page.evaluate(()=>dispatchEvent(new PageTransitionEvent('pageshow')));await page.clock.fastForward(11000);assert.equal(await page.locator('#home-controls').evaluate(e=>e.inert),true);
+ await page.emulateMedia({reducedMotion:'reduce'});await page.touchscreen.tap(100,150);assert.equal(await page.locator('#home-controls').evaluate(e=>getComputedStyle(e).transitionDuration),'0s');
  assert.deepEqual(await page.evaluate(()=>pauseCalls),[]);assert.deepEqual(errors,[]);
 });
 

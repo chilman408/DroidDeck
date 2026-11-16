@@ -23,6 +23,23 @@ HANDOFF_PREDECESSORS['14703568a3cf09351bbfa8e1f435b5cec0cb936ea006eb6e8316a5c9d2
  'release':'rc18','entry':'892b437bb6a3047fc001fe2b2272124e27d8ea0e70ad97cec4d5db93fc438a92',
  'handoffRecoverySha256':'125fadcfa9d7d843b818c1fb0f794a2f6f44ac4c10eb055a1e7fde496c8b707b',
  'handoffRecoveryOptional':True}
+# Two accepted aggregate layouts share one signed runtime. The immutable
+# installation origin selects ONLY among these publisher-pinned candidates.
+HANDOFF_SHARED_PREDECESSORS={
+ '2c7d495a3ed6ed096ec1285a08389c04be8c9070f83a3dfb9b8a5c889aacb394':[
+  {'aggregate':'c80a06892581d6f0e856cf35f595b1503cb1f3c031be82b3049c40e256c10d10','release':'rc18',
+   'entry':'4e97d9ceef4baa1a1940b9395ceff82bf53145daa137de855d5ccd820d0e65c2',
+   'handoffRecoverySha256':'72172e82d337f62b2892a9c242e7209576be19d3730a637c0dbc7d92723ba95d'},
+  {'aggregate':'842a4f5b771da4ea17d696b575d8e2c85b8791112a53e68e007f157841a6422d','release':'rc18',
+   'entry':'4a958dc03eaf6604a74b36559443ad5903396c34f590420b6ea627b3c82982e6',
+   'handoffRecoverySha256':'46bd3b5ccbf1cd3ad5e6b3a7000a90a9f3f19067047ac988b773bb62be8f8a98'},
+ ]}
+def select_predecessor(capture,*,history=None,entry=None):
+    if capture in HANDOFF_PREDECESSORS:return HANDOFF_PREDECESSORS[capture]
+    candidates=HANDOFF_SHARED_PREDECESSORS.get(capture,[])
+    matches=[value for value in candidates if (entry==value['entry'] if entry is not None else history=='droidmate-gpu-install-rc18-'+value['aggregate'][:16])]
+    if len(matches)!=1:raise ValueError('Only an explicit publisher-pinned installation origin is supported')
+    return matches[0]
 HANDOFF_PHASES=('new','intent','armed','cpu','stopped','mapped','loaded','started','verified','accepted')
 HANDOFF_METHODS=('admit','stage','restore_predecessor','retire_preference','switch_recovery','install_successor','check_successor','verify','finish')
 
@@ -54,13 +71,16 @@ class SuccessorHandoff:
         self.b=self.p.loader(ctx);self.tree=self.b.Tree(self.stack)
         self.i,self.program,self.program_raw=guest_helpers(material)
         baseline=journal.root/'baseline.json'
-        if os.path.lexists(baseline):preference=self.program.preference(self.b.encode(journal.read('baseline.json')['preference']))
+        saved=journal.read('baseline.json') if os.path.lexists(baseline) else None
+        if saved:preference=self.program.preference(self.b.encode(saved['preference']))
         else:
             with ExitStack() as stack:
                 preference=self.program.preference(self.b.Tree(stack).file(self.program.ROOT/'preference.json',4096))
         self.old_capture=preference['packageSha256']
-        if self.old_capture not in HANDOFF_PREDECESSORS:raise ValueError('Only an explicit publisher-pinned predecessor is supported')
-        self.predecessor=HANDOFF_PREDECESSORS[self.old_capture]
+        origin=None
+        if not saved and self.old_capture in HANDOFF_SHARED_PREDECESSORS:
+            with ExitStack() as stack:origin=self.program.document(self.b.Tree(stack).file(self.program.ROOT/'installation.json',8192))
+        self.predecessor=select_predecessor(self.old_capture,history=origin.get('history') if type(origin) is dict else None,entry=saved['oldEntrySha256'] if saved else None)
         self.old_root=Path('/usr/local/share/droidmate-'+self.predecessor['release']+'-'+self.predecessor['aggregate'])
         self.old_entry=self.old_root/'source/tools/aggregate-installer-entry.py'
         self.entry=ctx['root']/'source/tools/aggregate-installer-entry.py'
