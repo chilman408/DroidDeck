@@ -90,5 +90,5 @@ Other setups may work when Ubuntu offers **VA-API H.264 encoding** and DroidMate
 ## If you get stuck
 
 - **The browser won't connect?** Check that the Ubuntu VM is on. Try its local address from the same home network, using `https://` and `:8443`.
-- **The installer stopped or Android didn't come back after a restart?** Save the error and keep the VM and its files. If an update is recovering on its own, let it finish. [Recover an interrupted install or update](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#recover-an-interrupted-preserving-update)
-- **Need to undo an update?** Use the Undo steps for your version to keep your Android apps and data. [Undo an update](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#undo-an-accepted-update-from-rc17)
+- **The installer stopped or Android didn't come back after a restart?** Save the error and keep the VM and its files. If an update is recovering on its own, let it finish. [Recover an interrupted install or update](docs/RECOVERY.md#recover-an-interrupted-install-or-update)
+- **Need to undo an update?** Use the Undo steps for your version to keep your Android apps and data. [Undo an update](docs/RECOVERY.md#undo-an-update)

@@ -2,7 +2,7 @@
 
 This is optional. The addon lets one Ubuntu VM use a shared AMD GPU to compress video. Your **VNC console** stays available. The tested setup uses **Unraid 7.1.4, QEMU 9.2.3, and VirtIO(3D)**. The addon checks the actual host setup before it makes changes.
 
-Use this with a **new Ubuntu VM** after [Step 1 of the install guide](../INSTALL.md#1-set-up-ubuntu). If this VM already has a working DroidMate GPU addon, keep that setup. [Notes for existing GPU profiles](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#part-3-prepare-shared-gpu-encoding)
+Use this with a **new Ubuntu VM** after [Step 1 of the install guide](../INSTALL.md#1-set-up-ubuntu). If this VM already has a working DroidMate GPU addon, keep that setup. Keep its Undo notes handy.
 
 ## 1. Download the addon
 
@@ -70,4 +70,4 @@ printf 'VM_UUID=%s\nADDON=%s\nPROFILE=%s\nPROFILE_SHA256=%s\n' "$vm_uuid" "$addo
 
 Continue from [Step 2 of the DroidMate install guide](../INSTALL.md#2-write-down-ubuntus-address). Once Android is playing in your browser, open **Settings → Display** and look for **Encoding: GPU**.
 
-If you need to take the addon off later, restore the guest CPU runtime first, then undo the Unraid profile. Use the notes you saved. [Remove the GPU addon safely](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#undo-an-accepted-update-from-rc17)
+To take the addon off later, use the four lines you saved. [Remove the Unraid GPU addon](RECOVERY.md#remove-the-unraid-gpu-addon)
