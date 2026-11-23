@@ -17,9 +17,7 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 
 ## Install DroidMate
 
-**[Follow the numbered installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. The guide covers which Ubuntu environments are supported, what a GPU needs for hardware encoding, and how to enable the shared GPU in an Unraid VM.
-
-The tested 0.1.1 setup is **Ubuntu Desktop 26.04.1 LTS (x86-64)** in a **VirtIO 3D / VirGL VM on Unraid**. The guide explains the requirements for other Linux and Windows setups.
+**[Follow the numbered installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. GPU encoding is optional and was tested in an Ubuntu VM on Unraid.
 
 [Download DroidMate 0.1.1](https://github.com/chilman408/DroidMate/releases/tag/v0.1.1) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/QUALIFICATION.json)
 

@@ -1,43 +1,32 @@
 # Install DroidMate 0.1.1
 
-**For CPU encoding, finish Step 5 and open DroidMate in Step 6.** When the installer reports `phase: accepted`, the video stream is ready. If hardware encoding is unavailable, DroidMate can use the CPU. The Unraid hardware encoder addon is optional.
+You’ll set up Ubuntu, install DroidMate, then open Android in your browser. **You can skip the optional GPU encoding addon.**
 
-**The fresh installer still needs working VirGL 3D graphics inside Android.** 3D graphics draws the Android screen. Video encoding compresses that screen for the browser. CPU encoding handles the second job.
+Already using the public RC17 release? Keep your Ubuntu VM and Android apps. [Start at Step 3](#3-download-droidmate).
 
-If you already run public RC17, keep your installation and [start at Step 3](#3-find-your-address-and-download-droidmate).
+## 1. Set up Ubuntu
 
-## 1. Choose where Ubuntu will run
+A virtual machine (VM) is a computer that runs inside another computer. These steps use an Ubuntu VM.
 
-Use **Ubuntu Desktop 26.04.1 LTS, 64-bit PC (AMD64)** for a new VM. AMD64 works on both Intel and AMD x86-64 PCs. [Ubuntu downloads](https://releases.ubuntu.com/26.04/)
+1. Download the **64-bit PC (AMD64)** installer for **Ubuntu Desktop 26.04.1 LTS**. This works on both Intel and AMD PCs. [Download Ubuntu](https://releases.ubuntu.com/26.04/)
+2. Give your new VM at least **6 GB of memory**, a **new 128 GB virtual disk**, and **bridged networking** so it gets its own address on your home network. Choose **VirtIO 3D / VirGL** graphics so Android can draw its screen. In Unraid, choose **Virtual** for the graphics card, **VNC** for the console, and **VirtIO(3D)** for the video driver. Pick your graphics device under **Render GPU**. [Unraid VM setup](https://docs.unraid.net/unraid-os/using-unraid-to/create-virtual-machines/vm-setup/)
+3. Start the VM from the Ubuntu installer file. Open its console and follow the Ubuntu installer. If you choose **Erase disk and install Ubuntu**, check that the target is your new, empty virtual disk. Restart and sign in when Ubuntu finishes. [Ubuntu’s illustrated walkthrough](https://ubuntu.com/desktop/docs/en/latest/tutorial/install-ubuntu-desktop/)
 
-| Where Ubuntu runs | When you can use CPU encoding |
-| --- | --- |
-| **Unraid VM with VirtIO 3D / VirGL** | **Step 6**, after Step 5 reports `accepted`. CPU encoding was verified on Unraid. A fresh install without the optional encoder addon follows the same installer path if it passes the VirGL checks. That exact setup was not separately release-tested. |
-| **Proxmox VM** | **Step 6 if the install succeeds**, including the installer’s VirGL checks. This host is unverified for 0.1.1. [Proxmox VM graphics settings](https://pve.proxmox.com/wiki/Manual:_qm.conf) |
-| **TrueNAS VM** | **Step 6 if the install succeeds**, including the installer’s VirGL checks. This host is unverified for 0.1.1. [TrueNAS VM setup](https://www.truenas.com/docs/scale/virtualmachines/managingvms/) |
-| **Ubuntu directly on a standalone PC** | **No supported install step in 0.1.1.** A direct install normally exposes the physical GPU driver. The fresh installer expects Android to report VirGL. A PC hosting a compatible Ubuntu VM follows the VM route. |
-| **Ubuntu under Windows WSL** | **No supported install step in 0.1.1.** WSL’s systemd and GPU features alone don’t establish Waydroid and VirGL compatibility. You can use a Windows browser to open DroidMate running on a compatible Ubuntu VM. [WSL systemd](https://learn.microsoft.com/en-us/windows/wsl/systemd/) · [Waydroid kernel requirements](https://docs.waydro.id/debugging/getting-essential-information) |
+If you want the shared Unraid GPU to handle video encoding on a new VM, follow the [optional GPU steps](#optional-gpu-encoding) here. Otherwise, go to Step 2.
 
-## 2. Install and start Ubuntu
+## 2. Write down Ubuntu's address
 
-1. Create a VM. Use **6 GB RAM** or more, a **new 128 GB virtual disk**, and a bridged network so it gets its own address on your local network. Attach the Ubuntu ISO as the boot media.
-2. On Unraid, choose **VMs → Add VM → Ubuntu**. Set **Graphics Card** to **Virtual**, **VM Console Protocol** to **VNC**, **VM Console Video Driver** to **VirtIO(3D)**, and select your compatible shared AMD device under **Render GPU**. Keep that VM name handy. [Unraid VM setup](https://docs.unraid.net/unraid-os/using-unraid-to/create-virtual-machines/vm-setup/)
-3. Open the VM console and choose **Try or Install Ubuntu**, then **Install Ubuntu → Interactive installation**. Select the **new VM disk** and create a normal Ubuntu user. Only select **Erase disk and install Ubuntu** for the new, empty virtual disk. [Ubuntu's illustrated installer guide](https://ubuntu.com/desktop/docs/en/latest/tutorial/install-ubuntu-desktop/)
-4. When Ubuntu finishes installing, disconnect the ISO or put the virtual disk first in the boot order. Restart, sign in, and check that a website opens.
-5. To stream with CPU encoding, go straight to Step 3. To use the tested shared hardware encoder, start with the [Unraid GPU example](#optional-unraid-shared-gpu-example) and then return to Step 3.
-
-## 3. Find your address and download DroidMate
-
-In Ubuntu, open **Terminal** with **Ctrl+Alt+T**. Run:
+Sign in to Ubuntu. Open **Terminal** with **Ctrl+Alt+T**, then run:
 
 ```sh
-whoami
 hostname -I
 ```
 
-Write down Ubuntu's private IPv4 address, for example `192.168.1.50`. In a VM, use the guest's address. When `sudo` asks for your Ubuntu password, nothing appears on screen as you type.
+Write down the address that looks like `192.168.1.50`. Use the address you see in Ubuntu. This is how your browser finds your VM.
 
-Run these commands in the same Ubuntu Terminal:
+## 3. Download DroidMate
+
+Copy one box at a time into the Ubuntu Terminal. Press **Enter** and wait for it to finish before moving to the next box. If Ubuntu asks for your password, type it and press **Enter**. The password stays hidden while you type.
 
 ```sh
 sudo apt update && sudo apt install --yes ca-certificates curl python3 openssl
@@ -48,90 +37,52 @@ mkdir -p "$HOME/droidmate-0.1.1" && cd "$HOME/droidmate-0.1.1" &&
   curl --fail --location --output droidmate-0.1.1-install.pyz https://github.com/chilman408/DroidMate/releases/download/v0.1.1/droidmate-0.1.1-install.pyz
 ```
 
-## 4. Check the download and choose the install path
-
-Run this in the same download folder. The first check should say **droidmate-0.1.1-install.pyz: OK**. The second checks the embedded signature and should report `droidmate-aggregate-installer-verified`. Stop and check the download if either fails. [Published checksums](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/SHA256SUMS)
+## 4. Check the download
 
 ```sh
 printf '%s  %s\n' '37913bc0a263b99d85001f981e5425370e4ec9b0e934fd9ca492aee735fa8350' 'droidmate-0.1.1-install.pyz' | sha256sum --check - &&
   python3 -I -B droidmate-0.1.1-install.pyz verify
 ```
 
-Now check what the installer sees:
+This checks that the file matches the official download. Look for `droidmate-0.1.1-install.pyz: OK` and `droidmate-aggregate-installer-verified`. If a check fails, stop here. [Published checksums](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/SHA256SUMS)
 
-```sh
-sudo python3 -I -B droidmate-0.1.1-install.pyz plan
-```
-
-- **`layout: clean`** means use the new install below. `readyForInstallation: false` is expected at this point.
-- **`layout: portable`** on a working public RC17 setup means use the update below. Keep any existing GPU profile and its recovery notes.
-- If you see **`recognized-legacy`**, an unfamiliar existing install, or a refusal, keep the message and existing files. The commands below are for fresh Ubuntu and public RC17.
+Already have DroidMate and unsure which version? Use `sudo python3 -I -B droidmate-0.1.1-install.pyz plan` to check the setup. The update below is for public RC17. For other existing installs, save the output and ask for help.
 
 ## 5. Install or update
 
-Run **one** command in Ubuntu Terminal.
+Pick **one** box and run it in the same Terminal.
 
-**New installation.** Replace `UBUNTU_IP` with the IPv4 address from Step 3:
+**New installation.** Replace `UBUNTU_IP` with the address you wrote down in Step 2. If your address is `192.168.1.50`, that’s what goes at the end of the command:
 
 ```sh
 sudo python3 -I -B droidmate-0.1.1-install.pyz install-new "$(whoami)" UBUNTU_IP
 ```
 
-**Updating public RC17.** This keeps your Android apps, accounts, lockscreen, browser settings and TLS identity:
+**Public RC17 update.** Your Android apps, accounts and settings stay in place:
 
 ```sh
 sudo python3 -I -B droidmate-0.1.1-install.pyz upgrade-existing
 ```
 
-Keep Ubuntu running while it works. A fresh install downloads Android images and dependencies from their publishers and may take 30 minutes or longer. Wait for a final report with **`phase: accepted`**. If it stops or fails, keep the error and consult [recovery and Undo](#recovery-and-undo).
+Leave the Terminal open. A new install may take 30 minutes or longer. When you see **`phase: accepted`**, you can open DroidMate. If you see an error instead, save it and read the [recovery instructions](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#if-something-goes-wrong) before retrying.
 
-## 6. Open DroidMate in your browser
+## 6. Open DroidMate
 
-1. On your computer or another device on the same network, open `https://UBUNTU_IP:8443/` using the address from Step 3. For example, `https://192.168.1.50:8443/`. If you're updating and already have a working HTTPS hostname, use that address.
-2. A fresh install uses a local HTTPS certificate. If your browser warns about it, use Ubuntu Terminal to display the certificate fingerprint. Compare it to the SHA-256 fingerprint in your browser before trusting it. If your browser cannot trust the local certificate, use a reverse proxy with a trusted certificate.
+1. On a device connected to the same home network, open your browser and type **`https://UBUNTU_IP:8443/`** into the address bar. For example, if your Ubuntu address is `192.168.1.50`, type `https://192.168.1.50:8443/`. If you updated from RC17, use your usual DroidMate address.
+2. If the browser warns about the connection on a fresh install, check the certificate before you trust it. Run this command in Ubuntu and compare the fingerprint it prints with the SHA-256 fingerprint in your browser’s certificate details.
 
    ```sh
    openssl x509 -in "$HOME/.config/droiddeck/cert.pem" -noout -sha256 -fingerprint
    ```
 
-3. When Android appears, complete the first-run setup. Open an app and tap **Unmute** to check sound. Restart Ubuntu normally and open DroidMate again to check that it comes back.
-4. Open **Settings → Display**. For CPU encoding, choose **CPU Only** if a choice is available. Look for **Encoding: CPU** at the bottom while the picture is moving.
+3. You should see Android. Open an app and tap **Unmute** to check the sound. **The CPU can handle video encoding at this step.** To use it, open **Settings → Display** and choose **CPU Only** if you see a choice. **Encoding: CPU** at the bottom tells you the CPU is doing the work.
 
-To try a Tesla browser while parked, use an HTTPS hostname the car can reach and a certificate it trusts. Start on the local network. For remote use, set up protected access and enable browser login first. Browser login starts off.
+For a Tesla browser, test while parked and use an HTTPS address the car can reach and trust. [Browser access and recovery details](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#using-it-in-a-tesla)
 
-## Optional GPU encoding check
+## Optional GPU encoding
 
-Run `vainfo` **inside the Ubuntu environment running DroidMate**. For a VM, that means inside the guest. Install the matching Ubuntu VA-API driver for your device if needed.
+A GPU is a graphics chip. It can also compress video so the CPU has less to do. This option was tested in an **Ubuntu VM on Unraid**.
 
-```sh
-sudo apt update && sudo apt install --yes vainfo
-vainfo --display drm --device /dev/dri/renderD128
-```
+Other setups may work when Ubuntu offers **VA-API H.264 encoding** and DroidMate can access the GPU. If you run `vainfo` inside Ubuntu, look for `VAEntrypointEncSlice` or `VAEntrypointEncSliceLP` next to an H.264 profile. That tells you the driver offers encoding. To see whether DroidMate is using it, select **Automatic (GPU Preferred)** in **Settings → Display → Video Encoding** and look for **Encoding: GPU** while video plays. [VA-API capability examples](https://github.com/intel/libva-utils/blob/master/README.md#validate-your-environment)
 
-Substitute the render device path if yours differs. An H.264 profile with **`VAEntrypointEncSlice`** or **`VAEntrypointEncSliceLP`** means the driver advertises H.264 encoding. **`VAEntrypointVLD`** indicates decoding. [VA-API capability examples](https://github.com/intel/libva-utils/blob/master/README.md#validate-your-environment)
-
-Seeing H.264 encode support makes the environment a candidate for hardware encoding, including outside Unraid. DroidMate still needs to finish installation, its service needs access to the GPU, and the encoder needs to start successfully with the stream's settings.
-
-To verify actual use, select **Automatic (GPU Preferred)** in **Settings → Display → Video Encoding** if available. With video playing, look for **Encoding: GPU** at the bottom of Display. **Encoding: CPU** means the current stream is using software encoding.
-
-## Optional Unraid shared GPU example
-
-The tested example uses **Unraid 7.1.4, QEMU 9.2.3, a compatible shared AMD GPU, and Virtual / VNC / VirtIO(3D)**. The addon checks the exact host setup and changes the launcher for just the selected VM. It keeps VNC available.
-
-For a new Ubuntu VM, do this after Step 2 if you want the tested GPU path:
-
-1. With the VM still running, open **Unraid Terminal**. Use the release's commands to download, verify and prepare the **V2 host addon** for that VM. Save the profile hash the tool prints.
-2. Shut down only the selected VM. Use the same terminal to attach the prepared profile and start the VM again. Keep the profile details for Undo.
-3. Return to [Step 3](#3-find-your-address-and-download-droidmate). Once the stream is open, confirm **Encoding: GPU** while video is playing.
-
-[Exact Unraid addon commands and checks](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#part-3-prepare-shared-gpu-encoding)
-
-If your VM already has a working GPU addon, keep the existing profile and use the versioned guide for upgrade or Undo.
-
-## Recovery and Undo
-
-- If your browser cannot connect, check that Ubuntu is running, use its current address, and try from the same LAN first. The URL needs **`https://`** and **`:8443`**.
-- If an installation stops, preserve its files and logs. Let any automatic recovery finish before using the matching installer's recovery command.
-- To undo a guest update or remove an Unraid profile, use the release's [recovery and Undo instructions](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#if-something-goes-wrong). Restore the guest CPU runtime successfully before undoing the GPU profile on Unraid.
-
-[Installation guide as shipped with 0.1.1](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/INSTALL.md) · [Release downloads](https://github.com/chilman408/DroidMate/releases/tag/v0.1.1)
+On a new Unraid VM, the addon setup prepares a profile while the VM is running, attaches it while the VM is stopped, and keeps VNC available when you restart. [Unraid GPU addon steps](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#part-3-prepare-shared-gpu-encoding)
