@@ -12,7 +12,7 @@ A virtual machine (VM) is a computer that runs inside another computer. These st
 2. Give your new VM at least **6 GB of memory**, a **new 128 GB virtual disk**, and **bridged networking** so it gets its own address on your home network. Choose **VirtIO 3D / VirGL** graphics so Android can draw its screen. In Unraid, choose **Virtual** for the graphics card, **VNC** for the console, and **VirtIO(3D)** for the video driver. Pick your graphics device under **Render GPU**. [Unraid VM setup](https://docs.unraid.net/unraid-os/using-unraid-to/create-virtual-machines/vm-setup/)
 3. Start the VM from the Ubuntu installer file. Open its console and follow the Ubuntu installer. If you choose **Erase disk and install Ubuntu**, check that the target is your new, empty virtual disk. Restart and sign in when Ubuntu finishes. [Ubuntu’s illustrated walkthrough](https://ubuntu.com/desktop/docs/en/latest/tutorial/install-ubuntu-desktop/)
 
-If you want the shared Unraid GPU to handle video encoding on a new VM, follow the [optional GPU steps](#optional-gpu-encoding) here. Otherwise, go to Step 2.
+If you want the shared Unraid GPU to handle video encoding on a new VM, follow the [Unraid GPU walkthrough](docs/UNRAID-GPU.md) here. Otherwise, go to Step 2.
 
 ## 2. Write down Ubuntu's address
 
@@ -64,7 +64,7 @@ sudo python3 -I -B droidmate-0.1.1-install.pyz install-new "$(whoami)" UBUNTU_IP
 sudo python3 -I -B droidmate-0.1.1-install.pyz upgrade-existing
 ```
 
-Leave the Terminal open. A new install may take 30 minutes or longer. When you see **`phase: accepted`**, you can open DroidMate. If you see an error instead, save it and read the [recovery instructions](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#if-something-goes-wrong) before retrying.
+Leave the Terminal open. A new install may take 30 minutes or longer. When you see **`phase: accepted`**, you can open DroidMate. If you see an error instead, save it and see [If you get stuck](#if-you-get-stuck) before retrying.
 
 ## 6. Open DroidMate
 
@@ -77,7 +77,7 @@ Leave the Terminal open. A new install may take 30 minutes or longer. When you s
 
 3. You should see Android. Open an app and tap **Unmute** to check the sound. **The CPU can handle video encoding at this step.** To use it, open **Settings → Display** and choose **CPU Only** if you see a choice. **Encoding: CPU** at the bottom tells you the CPU is doing the work.
 
-For a Tesla browser, test while parked and use an HTTPS address the car can reach and trust. [Browser access and recovery details](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#using-it-in-a-tesla)
+**Want to use DroidMate away from home?** Follow [Open DroidMate from outside your home network](docs/REMOTE-ACCESS.md). It shows how to set up HTTPS with Synology or Nginx. Test a Tesla browser while parked.
 
 ## Optional GPU encoding
 
@@ -85,4 +85,10 @@ A GPU is a graphics chip. It can also compress video so the CPU has less to do. 
 
 Other setups may work when Ubuntu offers **VA-API H.264 encoding** and DroidMate can access the GPU. If you run `vainfo` inside Ubuntu, look for `VAEntrypointEncSlice` or `VAEntrypointEncSliceLP` next to an H.264 profile. That tells you the driver offers encoding. To see whether DroidMate is using it, select **Automatic (GPU Preferred)** in **Settings → Display → Video Encoding** and look for **Encoding: GPU** while video plays. [VA-API capability examples](https://github.com/intel/libva-utils/blob/master/README.md#validate-your-environment)
 
-On a new Unraid VM, the addon setup prepares a profile while the VM is running, attaches it while the VM is stopped, and keeps VNC available when you restart. [Unraid GPU addon steps](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#part-3-prepare-shared-gpu-encoding)
+[Turn on shared GPU encoding in Unraid](docs/UNRAID-GPU.md) walks through the addon one command at a time. Your Unraid console stays available.
+
+## If you get stuck
+
+- **The browser won't connect?** Check that the Ubuntu VM is on. Try its local address from the same home network, using `https://` and `:8443`.
+- **The installer stopped or Android didn't come back after a restart?** Save the error and keep the VM and its files. If an update is recovering on its own, let it finish. [Recover an interrupted install or update](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#recover-an-interrupted-preserving-update)
+- **Need to undo an update?** Use the Undo steps for your version to keep your Android apps and data. [Undo an update](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#undo-an-accepted-update-from-rc17)
