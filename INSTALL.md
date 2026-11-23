@@ -1,6 +1,6 @@
 # Install DroidMate 0.1.1
 
-You’ll set up Ubuntu, install DroidMate, then open Android in your browser. **You can skip the optional GPU encoding addon.**
+You’ll set up Ubuntu, install DroidMate, then open Android in your browser. **You can skip the optional GPU encoding addon which is only tested on an Unraid VM.**
 
 Already using the public RC17 release? Keep your Ubuntu VM and Android apps. [Start at Step 3](#3-download-droidmate).
 
@@ -50,7 +50,7 @@ Already have DroidMate and unsure which version? Use `sudo python3 -I -B droidma
 
 ## 5. Install or update
 
-Pick **one** box and run it in the same Terminal.
+Pick **one** box in this section (see below) and run it in the same Terminal.
 
 **New installation.** Replace `UBUNTU_IP` with the address you wrote down in Step 2. If your address is `192.168.1.50`, that’s what goes at the end of the command:
 
