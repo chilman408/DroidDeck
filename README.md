@@ -13,7 +13,7 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 - **Flexible hardware.** The supported setup runs on an x86 Ubuntu environment.
 - **Streaming that adapts.** DroidMate adjusts video bitrate and frame rate as the connection changes while keeping your chosen resolution. It offers AAC and FLAC audio and two H.264 playback modes, WebCodecs and Legacy.
 - **GPU encoding with recovery.** On the qualified setup, the GPU can compress the video stream. The CPU takes over if encoding fails, and DroidMate automatically tries the GPU again.
-- **In-place updates.** Future updates runs on top of existing installation and preserve apps, Android data and settings.
+- **In-place updates.** Supported updates keep your Android apps, data, and settings.
 
 ## Install DroidMate
 
@@ -24,3 +24,5 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 ## Source and license
 
 Some service names still use the original DroidDeck name for compatibility. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.2 source snapshot](https://github.com/chilman408/DroidMate/tree/v0.1.2/release-0.1.2) and [security reporting](SECURITY.md). DroidMate is an independent project.
+
+See the [current browser renderer guide](docs/BROWSER-RENDERER.md), [supported setups and limitations](docs/KNOWN_LIMITATIONS.md), or [earlier releases](https://github.com/chilman408/DroidMate/releases). The [pilot files and source](https://github.com/chilman408/DroidMate/tree/f1272af682b9a415eb3158d1bd7f7bac5bb1fe50) are available in the last main-branch snapshot that contained them.

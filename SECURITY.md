@@ -1,7 +1,7 @@
 # Security
 
-This pilot is intended for a trusted LAN. Optional browser authentication starts
-off; direct Internet exposure is not supported by this pilot configuration.
+DroidMate is intended for a trusted LAN. Browser Login starts off. For remote
+access, use the [HTTPS reverse proxy guide](docs/REMOTE-ACCESS.md).
 Anyone who can access an unauthenticated endpoint may control the Android session.
 
 Never publish VM or Unraid passwords, Android account data, access tokens, private
