@@ -21,8 +21,8 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 
 The tested 0.1.1 setup is **Ubuntu Desktop 26.04.1 LTS (x86-64)** in a **VirtIO 3D / VirGL VM on Unraid**. The guide explains the requirements for other Linux and Windows setups.
 
-[Download DroidMate 0.1.1](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.1) · [Release notes](https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/QUALIFICATION.json)
+[Download DroidMate 0.1.1](https://github.com/chilman408/DroidMate/releases/tag/v0.1.1) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/QUALIFICATION.json)
 
 ## Source and license
 
-The repository URL and some service names retain the earlier DroidDeck name. The app is DroidMate. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.1 source snapshot](https://github.com/chilman408/DroidDeck/tree/v0.1.1/release-0.1.1) and [security reporting](SECURITY.md). DroidMate is an independent project.
+Some service names still use the original DroidDeck name for compatibility. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.1 source snapshot](https://github.com/chilman408/DroidMate/tree/v0.1.1/release-0.1.1) and [security reporting](SECURITY.md). DroidMate is an independent project.

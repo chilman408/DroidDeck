@@ -45,12 +45,12 @@ sudo apt update && sudo apt install --yes ca-certificates curl python3 openssl
 
 ```sh
 mkdir -p "$HOME/droidmate-0.1.1" && cd "$HOME/droidmate-0.1.1" &&
-  curl --fail --location --output droidmate-0.1.1-install.pyz https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/droidmate-0.1.1-install.pyz
+  curl --fail --location --output droidmate-0.1.1-install.pyz https://github.com/chilman408/DroidMate/releases/download/v0.1.1/droidmate-0.1.1-install.pyz
 ```
 
 ## 4. Check the download and choose the install path
 
-Run this in the same download folder. The first check should say **droidmate-0.1.1-install.pyz: OK**. The second checks the embedded signature and should report `droidmate-aggregate-installer-verified`. Stop and check the download if either fails. [Published checksums](https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/SHA256SUMS)
+Run this in the same download folder. The first check should say **droidmate-0.1.1-install.pyz: OK**. The second checks the embedded signature and should report `droidmate-aggregate-installer-verified`. Stop and check the download if either fails. [Published checksums](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/SHA256SUMS)
 
 ```sh
 printf '%s  %s\n' '37913bc0a263b99d85001f981e5425370e4ec9b0e934fd9ca492aee735fa8350' 'droidmate-0.1.1-install.pyz' | sha256sum --check - &&
@@ -124,7 +124,7 @@ For a new Ubuntu VM, do this after Step 2 if you want the tested GPU path:
 2. Shut down only the selected VM. Use the same terminal to attach the prepared profile and start the VM again. Keep the profile details for Undo.
 3. Return to [Step 3](#3-find-your-address-and-download-droidmate). Once the stream is open, confirm **Encoding: GPU** while video is playing.
 
-[Exact Unraid addon commands and checks](https://github.com/chilman408/DroidDeck/blob/v0.1.1/release-0.1.1/INSTALL.md#part-3-prepare-shared-gpu-encoding)
+[Exact Unraid addon commands and checks](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#part-3-prepare-shared-gpu-encoding)
 
 If your VM already has a working GPU addon, keep the existing profile and use the versioned guide for upgrade or Undo.
 
@@ -132,6 +132,6 @@ If your VM already has a working GPU addon, keep the existing profile and use th
 
 - If your browser cannot connect, check that Ubuntu is running, use its current address, and try from the same LAN first. The URL needs **`https://`** and **`:8443`**.
 - If an installation stops, preserve its files and logs. Let any automatic recovery finish before using the matching installer's recovery command.
-- To undo a guest update or remove an Unraid profile, use the release's [recovery and Undo instructions](https://github.com/chilman408/DroidDeck/blob/v0.1.1/release-0.1.1/INSTALL.md#if-something-goes-wrong). Restore the guest CPU runtime successfully before undoing the GPU profile on Unraid.
+- To undo a guest update or remove an Unraid profile, use the release's [recovery and Undo instructions](https://github.com/chilman408/DroidMate/blob/v0.1.1/release-0.1.1/INSTALL.md#if-something-goes-wrong). Restore the guest CPU runtime successfully before undoing the GPU profile on Unraid.
 
-[Installation guide as shipped with 0.1.1](https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/INSTALL.md) · [Release downloads](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.1)
+[Installation guide as shipped with 0.1.1](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/INSTALL.md) · [Release downloads](https://github.com/chilman408/DroidMate/releases/tag/v0.1.1)
