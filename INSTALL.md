@@ -77,7 +77,7 @@ Leave the Terminal open. A new install may take 30 minutes or longer. When you s
 
 3. You should see Android. Open an app and tap **Unmute** to check the sound. **The CPU can handle video encoding at this step.** To use it, open **Settings → Display** and choose **CPU Only** if you see a choice. Go back to the main **Settings** menu. **Encoding: CPU** below **Updates** tells you the CPU is doing the work.
 
-**Want to use DroidMate away from home?** Follow [Open DroidMate from outside your home network](https://github.com/chilman408/DroidMate/blob/main/docs/REMOTE-ACCESS.md). It shows how to set up HTTPS with Synology or Nginx. Test a Tesla browser while parked.
+**Want to use DroidMate away from home? (AKA viewing from Tesla when FSD is engaged)** Follow [Open DroidMate from outside your home network](https://github.com/chilman408/DroidMate/blob/main/docs/REMOTE-ACCESS.md). It shows how to set up HTTPS with Synology or Nginx. Test a Tesla browser while parked.
 
 ## Optional GPU encoding
 
