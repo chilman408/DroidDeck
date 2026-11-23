@@ -9,8 +9,8 @@ Use this with a **new Ubuntu VM** after [Step 1 of the install guide](../INSTALL
 Keep the **Ubuntu VM running**. In your browser, open the **Unraid web page** and click its **Terminal** icon. Copy this box into **Unraid Terminal**.
 
 ```sh
-work=$(mktemp -d /tmp/droidmate-0.1.1.XXXXXX) && cd "$work" &&
-  curl --fail --location --output droidmate-gpu-host-v2.tar https://github.com/chilman408/DroidMate/releases/download/v0.1.1/droidmate-gpu-host-v2.tar &&
+work=$(mktemp -d /tmp/droidmate-0.1.2.XXXXXX) && cd "$work" &&
+  curl --fail --location --output droidmate-gpu-host-v2.tar https://github.com/chilman408/DroidMate/releases/download/v0.1.2/droidmate-gpu-host-v2.tar &&
   printf '%s  %s\n' '0e8ad94c23fb704439eeac7a72ea0970a896b8fa5222c9bbf7b647092199f06f' 'droidmate-gpu-host-v2.tar' | sha256sum --check -
 ```
 
@@ -68,6 +68,6 @@ Back in **Unraid Terminal**, run this and save the four lines it prints in a pri
 printf 'VM_UUID=%s\nADDON=%s\nPROFILE=%s\nPROFILE_SHA256=%s\n' "$vm_uuid" "$addon" "$profile" "$profile_sha"
 ```
 
-Continue from [Step 2 of the DroidMate install guide](../INSTALL.md#2-write-down-ubuntus-address). Once Android is playing in your browser, open **Settings → Display** and look for **Encoding: GPU**.
+Continue from [Step 2 of the DroidMate install guide](../INSTALL.md#2-write-down-ubuntus-address). Once Android is playing in your browser, open **Settings** and look for **Encoding: GPU** below **Updates**.
 
 To take the addon off later, use the four lines you saved. [Remove the Unraid GPU addon](RECOVERY.md#remove-the-unraid-gpu-addon)

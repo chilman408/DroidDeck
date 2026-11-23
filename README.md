@@ -19,8 +19,8 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 
 **[Follow this installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. GPU encoding is optional and was tested in an Ubuntu VM on Unraid.
 
-[Download DroidMate 0.1.1](https://github.com/chilman408/DroidMate/releases/tag/v0.1.1) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/QUALIFICATION.json)
+[Download DroidMate 0.1.2](https://github.com/chilman408/DroidMate/releases/tag/v0.1.2) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.2/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.2/QUALIFICATION.json)
 
 ## Source and license
 
-Some service names still use the original DroidDeck name for compatibility. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.1 source snapshot](https://github.com/chilman408/DroidMate/tree/v0.1.1/release-0.1.1) and [security reporting](SECURITY.md). DroidMate is an independent project.
+Some service names still use the original DroidDeck name for compatibility. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.2 source snapshot](https://github.com/chilman408/DroidMate/tree/v0.1.2/release-0.1.2) and [security reporting](SECURITY.md). DroidMate is an independent project.
