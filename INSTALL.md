@@ -81,7 +81,7 @@ Leave the Terminal open. A new install may take 30 minutes or longer. When you s
 
 ## Optional GPU encoding
 
-A GPU is a graphics chip. It can also compress video so the CPU has less to do. This option was tested in an **Ubuntu VM on Unraid**.
+A GPU encoding can compress video so the CPU has less to do. This option was tested in an **Ubuntu VM on Unraid**.
 
 Other setups may work when Ubuntu offers **VA-API H.264 encoding** and DroidMate can access the GPU. If you run `vainfo` inside Ubuntu, look for `VAEntrypointEncSlice` or `VAEntrypointEncSliceLP` next to an H.264 profile. That tells you the driver offers encoding. To see whether DroidMate is using it, select **Automatic (GPU Preferred)** in **Settings → Display → Video Encoding** and look for **Encoding: GPU** while video plays. [VA-API capability examples](https://github.com/intel/libva-utils/blob/master/README.md#validate-your-environment)
 
