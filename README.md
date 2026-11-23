@@ -1,40 +1,28 @@
-# DroidMate RC17
+# DroidMate
 
-Android apps streamed from an Ubuntu VM to your browser, with shared GPU H264 encoding and CPU fallback.
+**Run Android on an Ubuntu computer. Use it from your browser.**
 
-RC17 combines adaptive video quality, AAC-LC audio, expanded Display and Audio settings, Tesla WebCodecs compatibility, and the reversible per-VM GPU addon.
+DroidMate grew out of [TeslaAndroid](https://github.com/tesla-android), which showed how an Android screen running on a Raspberry Pi 4 could be used from a Tesla's browser. DroidMate is a complete rewrite of that idea for 64-bit Intel and AMD computers running Ubuntu. It uses [Waydroid](https://waydro.id/) to run Android and removes the need to own a Raspberry Pi 4. [Original TeslaAndroid Pi 4 guide](https://github.com/tesla-android/tesla-android.github.io/blob/main/install-guide.md)
 
-See the [qualification record](rc17/QUALIFICATION.json) and [release checksums](rc17/SHA256SUMS).
+## What does it do?
 
-## Install or update
+Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidMate in a browser to see the Android screen, tap or click to control apps, and listen to their audio. You can use a regular desktop browser or a compatible Tesla browser while parked. Your apps, sign-ins and settings live on the Ubuntu machine running Android.
 
-**Start here: [Install DroidMate RC17, step by step](rc17/INSTALL.md).** No Linux experience is assumed. The guide explains where to click, where to paste each command, and what a successful result looks like.
+## What's improved in DroidMate?
 
-- **New installation:** follow Steps 1–15, from creating the Ubuntu VM to opening Android in your browser.
-- **Updating an existing supported VM:** begin at Step 4. Keep your existing disk, apps, accounts, PINs and settings.
-- **Already running RC17 successfully:** no reinstall is needed.
+- **Flexible hardware.** The supported setup runs on an x86 Ubuntu VM and can share a compatible server GPU with other workloads.
+- **Streaming that adapts.** DroidMate adjusts video bitrate and frame rate as the connection changes while keeping your chosen resolution. It offers AAC and FLAC audio and two H.264 playback modes, WebCodecs and Legacy.
+- **GPU encoding with recovery.** On the qualified setup, the GPU can compress the video stream. The CPU takes over if encoding fails, and DroidMate automatically tries the GPU again.
+- **In-place updates.** The signed 0.1.1 installer can update an existing public RC17 installation and preserve apps, Android data and settings.
 
-The guide includes download checks, the shared GPU addon, a reboot check and Undo instructions. Use files from the [RC17 release](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.1-rc.17). The signed guest installer contains the program and its source; Android images and third-party apps are downloaded from their publishers.
+## Install DroidMate
 
-## Compatibility and defaults
+**[Follow the numbered installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. The guide covers which Ubuntu environments are supported, what a GPU needs for hardware encoding, and how to enable the shared GPU in an Unraid VM.
 
-The qualified GPU host contract is Unraid 7.1.4 / QEMU 9.2.3 with the tested shared AMD render device. Other host contracts are refused; CPU fallback remains available. GPU resize is used for beneficial same-aspect downscaling; other preprocessing stays on CPU. No whole-host CPU-saving percentage is claimed.
+The tested 0.1.1 setup is **Ubuntu Desktop 26.04.1 LTS (x86-64)** in a **VirtIO 3D / VirGL VM on Unraid**. The guide explains the requirements for other Linux and Windows setups.
 
-AAC-LC is the default browser audio format, with 64, 128 and 256 kbps choices and optional automatic quality. Display resolutions are 1080p, 900p, 720p, 600p and 480p, defaulting to 720p. Dynamic and manual aspect ratios, 15 fps, 450/720 kbps video and both H264 renderers are included. Automatic video quality preserves the selected ceilings and uses 15 fps at or below 1 Mbps.
+[Download DroidMate 0.1.1](https://github.com/chilman408/DroidDeck/releases/tag/v0.1.1) · [Release notes](https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidDeck/releases/download/v0.1.1/QUALIFICATION.json)
 
-Aurora Store is a new-install default. User-created secure lockscreens and private apps are supported. Test vehicle browsers while parked.
+## Source and license
 
-The public repository URL and existing internal service identifiers retain DroidDeck for compatibility. The application is DroidMate. Immutable signed core runtime `0.1.1-rc.20` is included under the aggregate RC17 release; it is not downgraded or renamed.
-
-Never publish Android data, account tokens, passwords, TLS private keys or DRM material. See [security reporting](SECURITY.md). Earlier pilot installation instructions remain in [the RC2 guide](docs/INSTALL.md).
-
-## Source and License
-
-`installer/` holds the exact accepted source TAR contents. Frozen build-time
-candidate flags are not rewritten after testing; release `release.json` records
-acceptance for those exact bytes. Old release tags/assets remain immutable.
-Private development history and operational checkpoints are not published.
-
-DroidDeck source is GPL-3.0-only; see [LICENSE](LICENSE). Upstream components keep
-their own licenses. No third-party endorsement, certification or account/DRM
-compatibility is asserted. RC17's guest installer verifies its embedded release signature; the older RC2 pilot used checksums without a digital signature.
+The repository URL and some service names retain the earlier DroidDeck name. The app is DroidMate. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.1 source snapshot](https://github.com/chilman408/DroidDeck/tree/v0.1.1/release-0.1.1) and [security reporting](SECURITY.md). DroidMate is an independent project.
