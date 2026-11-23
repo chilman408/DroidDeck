@@ -10,14 +10,14 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 
 ## What's improved in DroidMate?
 
-- **Flexible hardware.** The supported setup runs on an x86 Ubuntu VM and can share a compatible server GPU with other workloads.
+- **Flexible hardware.** The supported setup runs on an x86 Ubuntu environment.
 - **Streaming that adapts.** DroidMate adjusts video bitrate and frame rate as the connection changes while keeping your chosen resolution. It offers AAC and FLAC audio and two H.264 playback modes, WebCodecs and Legacy.
 - **GPU encoding with recovery.** On the qualified setup, the GPU can compress the video stream. The CPU takes over if encoding fails, and DroidMate automatically tries the GPU again.
-- **In-place updates.** The signed 0.1.1 installer can update an existing public RC17 installation and preserve apps, Android data and settings.
+- **In-place updates.** Future updates runs on top of existing installation and preserve apps, Android data and settings.
 
 ## Install DroidMate
 
-**[Follow the numbered installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. GPU encoding is optional and was tested in an Ubuntu VM on Unraid.
+**[Follow this installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. GPU encoding is optional and was tested in an Ubuntu VM on Unraid.
 
 [Download DroidMate 0.1.1](https://github.com/chilman408/DroidMate/releases/tag/v0.1.1) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.1/QUALIFICATION.json)
 
