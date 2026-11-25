@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "product": "DroidDeck",
+  "productVersion": "0.1.0-preview",
+  "kind": "frontend-component",
+  "installable": false,
+  "sourceRevision": "34763a62819a1dedad9d3eb62f1e175f2659091f",
+  "patchSha256": "9e8631637dd9b5705cdb17a98cec34c61a11f229156ce219b7c4b9e4583a481d",
+  "files": [
+    {
+      "path": "LICENSE",
+      "size": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "assets/donations-qr.svg",
+      "size": 4231,
+      "sha256": "1935564279df3fa85e4fa93f4288d19a05d1b3c27f61ae6572039773f7deeee0"
+    },
+    {
+      "path": "assets/droiddeck-logo.png",
+      "size": 664836,
+      "sha256": "d50a79c92129aa9e6462eedb0294ce0b5c09da1b91433672225f31c5f938e475"
+    },
+    {
+      "path": "assets/tesla-android-logo.png",
+      "size": 32776,
+      "sha256": "e3093f2456dd8b5d85832a7a647cfc2bf708a5e57f63f0b872e8687388ab980c"
+    },
+    {
+      "path": "css/app.css",
+      "size": 26508,
+      "sha256": "81e0cd8fdcb17fd94c2e938b309adca674959d21e562bcf57fa97435e15f42e1"
+    },
+    {
+      "path": "fonts/MaterialIcons-Regular.otf",
+      "size": 1299300,
+      "sha256": "d04d08fe02dab67188f72e1e97258f4a0d8b5982523e02edea132f8090f9fab4"
+    },
+    {
+      "path": "fonts/Roboto-Regular.ttf",
+      "size": 168260,
+      "sha256": "4e147ab64b9fdf6d89d01f6b8c3ca0b3cddc59d608a8e2218f9a2504b5c98e14"
+    },
+    {
+      "path": "index.html",
+      "size": 6818,
+      "sha256": "3f8a895a14a7e9247844effe4dbf86793f9dbfb6fc9be858d2ea43031b104852"
+    },
+    {
+      "path": "js/audio/audio-controller.js",
+      "size": 4483,
+      "sha256": "97f0ad8a3e7bfad0207aafcd8688a602ebc7550ef25f26f4908076dcbb50edc7"
+    },
+    {
+      "path": "js/audio/audio-ws-worker.js",
+      "size": 1563,
+      "sha256": "b3dda5d2bcab80ee633faa21ab0abb58bba5b80ac5d379359e81eb49f4ae5a24"
+    },
+    {
+      "path": "js/audio/audioplayback.js",
+      "size": 15052,
+      "sha256": "a2ae8d878a3d74449c50c2a7f6c786e0a0f3525f314627e55c99dc868004f3eb"
+    },
+    {
+      "path": "js/core/api-client.js",
+      "size": 8996,
+      "sha256": "95e5236908f962ede07a679cc9ff7f24fcbe63cacc6c1d7091deff30e0efda2c"
+    },
+    {
+      "path": "js/core/app.js",
+      "size": 10418,
+      "sha256": "a6aff3a36dc09610dc561a3b1f68e1fb22194b4ddbb2ab121934bd2f758e0bd5"
+    },
+    {
+      "path": "js/core/shared.js",
+      "size": 7580,
+      "sha256": "29a8f1b630237ff169836fda0c95ee09a10b01b3948ec5d052be6aea0c2afbdf"
+    },
+    {
+      "path": "js/display/display-controller.js",
+      "size": 34345,
+      "sha256": "622deb093c65f3b9a24f0fa1ced9d3e67d83ea71e87b45c694fab443dd12e67b"
+    },
+    {
+      "path": "js/display/display-renderer-manager.js",
+      "size": 11658,
+      "sha256": "d086e1f915e01d80520e6b0d71dc4fa05614b5b52e17a16bce584cff8ef38527"
+    },
+    {
+      "path": "js/display/renderers/h264-broadway/Decoder.js",
+      "size": 45237,
+      "sha256": "c18ef5ef3ee9361e240386fce570657c3b831370ab406a87a131861aa184e82e"
+    },
+    {
+      "path": "js/display/renderers/h264-broadway/YUVCanvas.js",
+      "size": 9357,
+      "sha256": "c513bbbc938b0d56205ebe79dc836023182779cd31a658d1baf47d654b39bed6"
+    },
+    {
+      "path": "js/display/renderers/h264-broadway/avc.wasm",
+      "size": 132979,
+      "sha256": "f05e959033da0e40f3b91943b3cf5a5119316728bfdc9dab90e712a2aded6420"
+    },
+    {
+      "path": "js/display/renderers/h264-broadway/h264Brodway.js",
+      "size": 10728,
+      "sha256": "09775c9871b97e783cc658ea002fdc885e7744affdb26aa53c93d8d1e9017771"
+    },
+    {
+      "path": "js/display/renderers/h264-broadway/h264BrodwayWorker.js",
+      "size": 6833,
+      "sha256": "00662aeb0caf2a2cc899545e105f15e47f82aaa4fecb396e3b260fb09d82721f"
+    },
+    {
+      "path": "js/display/renderers/h264-webcodecs/h264WebCodecs.js",
+      "size": 8591,
+      "sha256": "4af1aecb329b378f1a2363c67a187ddbd99a1dc069523068802de520a402f64d"
+    },
+    {
+      "path": "js/display/renderers/h264-webcodecs/h264WebCodecsWorker.js",
+      "size": 15269,
+      "sha256": "8808b505f4c9aacc6548eb1d845ff59cd95b2464bf7941b4fd7bd71fbcab6f94"
+    },
+    {
+      "path": "js/display/renderers/mjpeg/mjpeg.js",
+      "size": 457,
+      "sha256": "992eff8736488461a70aae3d35f0f86e0dc68430d57f8a2d48b104ec88e38f1e"
+    },
+    {
+      "path": "js/gps/estimator.js",
+      "size": 2074,
+      "sha256": "9c23c7a81239a38be47cd4340af8950bff99b8fcd34906ac57ebdbdba655c5aa"
+    },
+    {
+      "path": "js/gps/gps-controller.js",
+      "size": 6117,
+      "sha256": "d3de039bf6a7bbf76a0b2e6fc174f5da0934ead006bf9b05b46677a74b55113e"
+    },
+    {
+      "path": "js/home/home-controller.js",
+      "size": 5556,
+      "sha256": "3b285819522ccdd08af5510c1589f5497a5198fafb3dbc9d07ea79c3d055368a"
+    },
+    {
+      "path": "js/release-notes/release-notes-controller.js",
+      "size": 2289,
+      "sha256": "0c1e0976186d5f28a0083603e0d78de7b2683340e35c210dcd750b2c4d185e81"
+    },
+    {
+      "path": "js/release-notes/release-notes-data.js",
+      "size": 3147,
+      "sha256": "11946f0bae399bc01bbfde572ec42a2652ac99984cc49ece041f44909943a27b"
+    },
+    {
+      "path": "js/settings/settings-controller.js",
+      "size": 61401,
+      "sha256": "aab0751ac4906f8295ef162379b5d65f793389faf589a799ce0aa4d9e9d9198a"
+    },
+    {
+      "path": "js/shell/shell-controller.js",
+      "size": 5160,
+      "sha256": "7321f91e24367192ad8f3f6d97ac3c548138843f18566c88de1ca73e364311de"
+    },
+    {
+      "path": "js/touchscreen/touchscreen-controller.js",
+      "size": 8933,
+      "sha256": "0372ad7b1e687e8c90aa805dcca1c6acf64b0a9b388dbb616ff6b670f2e5ad56"
+    },
+    {
+      "path": "js/vendor/reconnecting/reconnecting-websocket.js",
+      "size": 14429,
+      "sha256": "759530c7a9b3e67b3d2ccee851b450bfd54163140ee90a137ba31833eb2060a1"
+    }
+  ]
+}
