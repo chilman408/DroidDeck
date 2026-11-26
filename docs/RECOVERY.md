@@ -14,3 +14,30 @@ the files it needs for recovery on that VM.
 
 If the command stops with an error, keep the VM and installer. Save the error
 message for troubleshooting.
+
+## Remove the Unraid GPU addon
+
+This part is only for a VM where you set up the [Unraid GPU addon](UNRAID-GPU.md).
+
+1. Finish the matching Undo steps above **in Ubuntu first**. Wait for **`"phase": "restored"`** and check that video plays. If Undo reports an error, stop here.
+2. On Unraid’s **VMs** page, shut down **only the Ubuntu VM**. Open **Unraid Terminal** from the Unraid web page.
+3. Find the four lines you saved when you [installed the addon](UNRAID-GPU.md#5-save-your-undo-details-and-finish). Put the value from each saved line in place of the matching `YOUR_SAVED_…` text below. Keep the quotes, then paste the box into Unraid Terminal.
+
+   ```sh
+   vm_uuid='YOUR_SAVED_VM_UUID'
+   addon='YOUR_SAVED_ADDON_PATH'
+   profile='YOUR_SAVED_PROFILE_PATH'
+   profile_sha='YOUR_SAVED_PROFILE_SHA256'
+   virsh domstate "$vm_uuid"
+   ```
+
+4. Once you see **`shut off`**, run this box in the same Unraid Terminal.
+
+   ```sh
+   php "$addon/source/tools/qemu-video-launcher-install.php" "$profile" "$profile_sha" undo &&
+     virsh start "$vm_uuid"
+   ```
+
+5. Look for **`"phase": "undone"`** and a message that the VM started. Open DroidMate again and check the picture and sound. Keep the saved notes and profile folders in case you need help later.
+
+[Back to installation](../INSTALL.md)
