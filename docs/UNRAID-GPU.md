@@ -9,8 +9,8 @@ Use this with a **new Ubuntu VM** after [Step 1 of the install guide](../INSTALL
 Keep the **Ubuntu VM running**. In your browser, open the **Unraid web page** and click its **Terminal** icon. Copy this box into **Unraid Terminal**.
 
 ```sh
-work=$(mktemp -d /tmp/droidmate-0.1.3.XXXXXX) && cd "$work" &&
-  curl --fail --location --output droidmate-gpu-host-v2.tar https://github.com/chilman408/DroidMate/releases/download/v0.1.3/droidmate-gpu-host-v2.tar &&
+work=$(mktemp -d /tmp/droidmate-0.1.5.XXXXXX) && cd "$work" &&
+  curl --fail --location --output droidmate-gpu-host-v2.tar https://github.com/chilman408/DroidMate/releases/download/v0.1.5/droidmate-gpu-host-v2.tar &&
   printf '%s  %s\n' '0e8ad94c23fb704439eeac7a72ea0970a896b8fa5222c9bbf7b647092199f06f' 'droidmate-gpu-host-v2.tar' | sha256sum --check -
 ```
 

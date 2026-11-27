@@ -1,8 +1,8 @@
-# Install DroidMate 0.1.3
+# Install DroidMate 0.1.5
 
 You’ll set up Ubuntu, install DroidMate, then open Android in your browser. **You can skip the optional GPU encoding addon which is only tested on an Unraid VM.**
 
-Already using DroidMate 0.1.2, 0.1.1 or public RC17? Keep your Ubuntu VM and Android apps. [Start at Step 3](#3-download-droidmate).
+Already using DroidMate 0.1.3, 0.1.2, 0.1.1 or public RC17? Keep your Ubuntu VM and Android apps. [Start at Step 3](#3-download-droidmate).
 
 ## 1. Set up Ubuntu
 
@@ -33,20 +33,20 @@ sudo apt update && sudo apt install --yes ca-certificates curl python3 openssl
 ```
 
 ```sh
-mkdir -p "$HOME/droidmate-0.1.3" && cd "$HOME/droidmate-0.1.3" &&
-  curl --fail --location --output droidmate-0.1.3-install.pyz https://github.com/chilman408/DroidMate/releases/download/v0.1.3/droidmate-0.1.3-install.pyz
+mkdir -p "$HOME/droidmate-0.1.5" && cd "$HOME/droidmate-0.1.5" &&
+  curl --fail --location --output droidmate-0.1.5-install.pyz https://github.com/chilman408/DroidMate/releases/download/v0.1.5/droidmate-0.1.5-install.pyz
 ```
 
 ## 4. Check the download
 
 ```sh
-printf '%s  %s\n' 'a54cab5acd19d46f2e069f2ee3c6121141f61e9f205487cb1851af4af1bc9ec3' 'droidmate-0.1.3-install.pyz' | sha256sum --check - &&
-  python3 -I -B droidmate-0.1.3-install.pyz verify
+printf '%s  %s\n' '80a89a304e6e612dd886c485568f55b219e5eb83ee4c63d23e72b29ccdc836d4' 'droidmate-0.1.5-install.pyz' | sha256sum --check - &&
+  python3 -I -B droidmate-0.1.5-install.pyz verify
 ```
 
-This checks that the file matches the official download. Look for `droidmate-0.1.3-install.pyz: OK` and `droidmate-aggregate-installer-verified`. If a check fails, stop here. [Published checksums](https://github.com/chilman408/DroidMate/releases/download/v0.1.3/SHA256SUMS)
+This checks that the file matches the official download. Look for `droidmate-0.1.5-install.pyz: OK` and `droidmate-aggregate-installer-verified`. If a check fails, stop here. [Published checksums](https://github.com/chilman408/DroidMate/releases/download/v0.1.5/SHA256SUMS)
 
-Already have DroidMate and unsure which version? Use `sudo python3 -I -B droidmate-0.1.3-install.pyz plan` to check the setup. The update below is for public 0.1.2, 0.1.1 and RC17 installations. For other existing installs, save the output and ask for help.
+Already have DroidMate and unsure which version? Use `sudo python3 -I -B droidmate-0.1.5-install.pyz plan` to check the setup. Use the update command below if the check reports a portable installation. If it reports a legacy layout, save the output and ask for the legacy upgrade steps.
 
 ## 5. Install or update
 
@@ -55,13 +55,13 @@ Pick **one** box in this section (see below) and run it in the same Terminal.
 **New installation.** Replace `UBUNTU_IP` with the address you wrote down in Step 2. If your address is `192.168.1.50`, that’s what goes at the end of the command:
 
 ```sh
-sudo python3 -I -B droidmate-0.1.3-install.pyz install-new "$(whoami)" UBUNTU_IP
+sudo python3 -I -B droidmate-0.1.5-install.pyz install-new "$(whoami)" UBUNTU_IP
 ```
 
-**Update from 0.1.2, 0.1.1 or public RC17.** Your Android apps, accounts and settings stay in place:
+**Update a portable installation.** Use this for public 0.1.3, 0.1.2, 0.1.1, public RC17 or the supported compact Settings preview. Your Android apps, accounts and settings stay in place:
 
 ```sh
-sudo python3 -I -B droidmate-0.1.3-install.pyz upgrade-existing
+sudo python3 -I -B droidmate-0.1.5-install.pyz upgrade-existing
 ```
 
 Leave the Terminal open. A new install may take 30 minutes or longer. When you see **`phase: accepted`**, you can open DroidMate. If you see an error instead, save it and see [If you get stuck](#if-you-get-stuck) before retrying.
@@ -101,13 +101,13 @@ Other setups may work when Ubuntu offers **VA-API H.264 encoding** and DroidMate
    **Updating an existing installation**
 
    ```sh
-   cd "$HOME/droidmate-0.1.3" && sudo python3 -I -B droidmate-0.1.3-install.pyz upgrade-recover
+   cd "$HOME/droidmate-0.1.5" && sudo python3 -I -B droidmate-0.1.5-install.pyz upgrade-recover
    ```
 
    **Installing on fresh Ubuntu**
 
    ```sh
-   cd "$HOME/droidmate-0.1.3" && sudo python3 -I -B droidmate-0.1.3-install.pyz recover
+   cd "$HOME/droidmate-0.1.5" && sudo python3 -I -B droidmate-0.1.5-install.pyz recover
    ```
 
 3. If you see `accepted` or `restored`, try your usual DroidMate address. If recovery refuses or the new install stopped before the installer saved its recovery information, keep the files and ask for help with the error.
@@ -117,7 +117,7 @@ Other setups may work when Ubuntu offers **VA-API H.264 encoding** and DroidMate
 To undo a completed update, run this in Ubuntu Terminal.
 
 ```sh
-cd "$HOME/droidmate-0.1.3" && sudo python3 -I -B droidmate-0.1.3-install.pyz upgrade-undo
+cd "$HOME/droidmate-0.1.5" && sudo python3 -I -B droidmate-0.1.5-install.pyz upgrade-undo
 ```
 
 On a completed fresh install, use `undo` in place of `upgrade-undo`. Undo brings back the preserved CPU streaming setup and keeps Ubuntu and your Android apps and data. Wait for `restored`, then check picture and sound in the browser.

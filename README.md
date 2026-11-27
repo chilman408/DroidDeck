@@ -19,10 +19,10 @@ Think of it as an Android tablet that lives on your Ubuntu computer. Open DroidM
 
 **[Follow this installation guide](INSTALL.md)** to set up Ubuntu, download and verify the installer, and open DroidMate in your browser. GPU encoding is optional and was tested in an Ubuntu VM on Unraid.
 
-[Download DroidMate 0.1.3](https://github.com/chilman408/DroidMate/releases/tag/v0.1.3) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.3/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.3/QUALIFICATION.json)
+[Download DroidMate 0.1.5](https://github.com/chilman408/DroidMate/releases/tag/v0.1.5) · [Release notes](https://github.com/chilman408/DroidMate/releases/download/v0.1.5/RELEASE-NOTES.md) · [Test results](https://github.com/chilman408/DroidMate/releases/download/v0.1.5/QUALIFICATION.json)
 
 ## Source and license
 
-Some service names still use the original DroidDeck name for compatibility. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.3 source snapshot](https://github.com/chilman408/DroidMate/tree/v0.1.3/release-0.1.3) and [security reporting](SECURITY.md). DroidMate is an independent project.
+Some service names still use the original DroidDeck name for compatibility. Its source is [GPL-3.0-only](LICENSE), and upstream components retain their licenses. See the [0.1.5 source snapshot](https://github.com/chilman408/DroidMate/tree/v0.1.5/release-0.1.5) and [security reporting](SECURITY.md). DroidMate is an independent project.
 
 See the [current browser renderer guide](docs/BROWSER-RENDERER.md), [supported setups and limitations](docs/KNOWN_LIMITATIONS.md), or [earlier releases](https://github.com/chilman408/DroidMate/releases). The [pilot files and source](https://github.com/chilman408/DroidMate/tree/f1272af682b9a415eb3158d1bd7f7bac5bb1fe50) are available in the last main-branch snapshot that contained them.
